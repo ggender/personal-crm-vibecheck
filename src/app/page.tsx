@@ -105,6 +105,13 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         </h1>
       </header>
       <main className="grid flex-1 grid-cols-1 md:min-h-0 md:grid-cols-[minmax(18rem,36%)_1fr]">
+        {/* Without this, the keyboard has to walk through the whole list. */}
+        <a
+          href="#contact-panel"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-10 focus:m-2 focus:rounded-lg focus:bg-card focus:px-3 focus:py-2 focus:text-sm focus:ring-3 focus:ring-ring/50"
+        >
+          Перейти к карточке
+        </a>
         <section
           aria-label="Список контактов"
           className="flex max-h-[45dvh] min-h-0 flex-col border-b bg-card md:max-h-none md:border-r md:border-b-0"
@@ -137,8 +144,10 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
           />
         </section>
         <section
+          id="contact-panel"
+          tabIndex={-1}
           aria-label="Карточка контакта"
-          className="min-h-0 md:overflow-y-auto"
+          className="min-h-0 outline-none md:overflow-y-auto"
         >
           {rightPanel}
         </section>

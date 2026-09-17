@@ -66,13 +66,10 @@ export function NoteForm({ contactId, todayLabel }: NoteFormProps) {
   const isTooLong = length > LIMITS.note;
 
   return (
-    <form
-      className="space-y-2"
-      onSubmit={(event) => {
-        event.preventDefault();
-        save();
-      }}
-    >
+    // The buttons are type="button" on purpose: before the page comes alive
+    // a real submit button would make the browser send the form itself and
+    // put the note text into the address bar.
+    <form className="space-y-2">
       <label htmlFor="note-body" className="sr-only">
         Новая заметка
       </label>
@@ -98,7 +95,7 @@ export function NoteForm({ contactId, todayLabel }: NoteFormProps) {
             </span>
           )}
         </p>
-        <Button type="submit" size="lg" disabled={isPending}>
+        <Button type="button" size="lg" disabled={isPending} onClick={save}>
           {isPending ? "Сохраняю…" : "Сохранить заметку"}
         </Button>
       </div>
@@ -111,10 +108,11 @@ export function NoteForm({ contactId, todayLabel }: NoteFormProps) {
             </span>
             {error.canRetry && (
               <Button
-                type="submit"
+                type="button"
                 variant="link"
                 size="sm"
                 disabled={isPending}
+                onClick={save}
                 className="h-auto px-0 text-destructive underline"
               >
                 Повторить

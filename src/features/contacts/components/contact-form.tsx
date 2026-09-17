@@ -146,12 +146,18 @@ export function ContactForm({
   return (
     <form
       // Our own checks show Russian messages under the field, so the
-      // browser's built-in bubbles must not intercept the submit.
+      // browser's built-in bubbles must not intercept anything. The buttons
+      // are type="button": before the page comes alive a real submit button
+      // would make the browser send the form itself, with the typed values
+      // landing in the address bar.
       noValidate
       className="mx-auto w-full max-w-2xl space-y-5 p-4 sm:p-6"
-      onSubmit={(event) => {
-        event.preventDefault();
-        submit();
+      onKeyDown={(event) => {
+        const target = event.target as HTMLElement;
+        if (event.key === "Enter" && target.tagName === "INPUT") {
+          event.preventDefault();
+          submit();
+        }
       }}
     >
       <h2 className="font-heading text-3xl leading-tight font-semibold">
@@ -214,7 +220,7 @@ export function ContactForm({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" size="lg" disabled={isPending}>
+        <Button type="button" size="lg" disabled={isPending} onClick={submit}>
           {isPending ? "Сохраняю…" : isEdit ? "Сохранить" : "Добавить"}
         </Button>
         <Link
@@ -234,10 +240,11 @@ export function ContactForm({
           <p className="flex flex-wrap items-center gap-x-2 text-sm text-destructive">
             <span>{formError}. Введённое на месте.</span>
             <Button
-              type="submit"
+              type="button"
               variant="link"
               size="sm"
               disabled={isPending}
+              onClick={submit}
               className="h-auto px-0 text-destructive underline"
             >
               Повторить
