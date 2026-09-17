@@ -68,3 +68,29 @@ export function formatNoteDate(date: Date, now: Date = new Date()): string {
 export function formatTodayLabel(now: Date = new Date()): string {
   return `сегодня, ${dayMonthFormat.format(now)}`;
 }
+
+const NOTE_FORMS: PluralForms = ["заметка", "заметки", "заметок"];
+// Accusative case: «…и 1 заметку?»
+const NOTE_FORMS_ACCUSATIVE: PluralForms = ["заметку", "заметки", "заметок"];
+
+export function formatNoteCount(count: number): string {
+  return `${count} ${pluralize(count, NOTE_FORMS)}`;
+}
+
+export function deleteContactQuestion(name: string, noteCount: number): string {
+  if (noteCount === 0) {
+    return `Удалить контакт «${name}»?`;
+  }
+  return `Удалить контакт «${name}» и ${noteCount} ${pluralize(noteCount, NOTE_FORMS_ACCUSATIVE)}?`;
+}
+
+export function deleteNoteQuestion(date: Date, now: Date = new Date()): string {
+  const when = formatNoteDate(date, now);
+  if (when === "сегодня") {
+    return "Удалить сегодняшнюю заметку?";
+  }
+  if (when === "вчера") {
+    return "Удалить вчерашнюю заметку?";
+  }
+  return `Удалить заметку от ${when}?`;
+}

@@ -1,5 +1,6 @@
 import type { Note } from "../data/notes-repo";
-import { formatNoteDate } from "../format";
+import { deleteNoteQuestion, formatNoteDate } from "../format";
+import { DeleteNoteButton } from "./delete-dialogs";
 
 type NotesFeedProps = {
   notes: Note[];
@@ -20,11 +21,17 @@ export function NotesFeed({ notes, now }: NotesFeedProps) {
         <ol className="space-y-4">
           {notes.map((note) => (
             <li key={note.id} className="border-l-2 border-border pl-3">
-              <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                <time dateTime={note.createdAt.toISOString()}>
-                  {formatNoteDate(note.createdAt, now)}
-                </time>
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                  <time dateTime={note.createdAt.toISOString()}>
+                    {formatNoteDate(note.createdAt, now)}
+                  </time>
+                </p>
+                <DeleteNoteButton
+                  noteId={note.id}
+                  question={deleteNoteQuestion(note.createdAt, now)}
+                />
+              </div>
               <p className="mt-0.5 text-sm wrap-anywhere whitespace-pre-wrap">
                 {note.body}
               </p>

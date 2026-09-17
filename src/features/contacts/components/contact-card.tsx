@@ -1,11 +1,12 @@
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil } from "lucide-react";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import type { Contact } from "../data/contacts-repo";
 import type { Note } from "../data/notes-repo";
-import { formatTodayLabel } from "../format";
+import { deleteContactQuestion, formatTodayLabel } from "../format";
 import { screenHref } from "../screen-url";
+import { DeleteContactButton } from "./delete-dialogs";
 import { NoteForm } from "./note-form";
 import { NotesFeed } from "./notes-feed";
 
@@ -86,10 +87,11 @@ export function ContactCard({ contact, notes, now, query }: ContactCardProps) {
           <Pencil aria-hidden />
           Изменить
         </Link>
-        <Button variant="destructive" size="lg" disabled>
-          <Trash2 aria-hidden />
-          Удалить контакт
-        </Button>
+        <DeleteContactButton
+          contactId={contact.id}
+          query={query}
+          question={deleteContactQuestion(contact.name, notes.length)}
+        />
       </div>
     </article>
   );

@@ -7,6 +7,8 @@ import * as notesRepo from "./data/notes-repo";
 import {
   addNoteInput,
   createContactInput,
+  deleteContactInput,
+  deleteNoteInput,
   fieldErrors,
   firstIssueMessage,
   updateContactInput,
@@ -135,5 +137,66 @@ export async function updateContact(input: unknown): Promise<FormResult> {
       error: "Не удалось сохранить изменения",
       canRetry: true,
     };
+  }
+}
+
+export async function deleteNote(input: {
+  noteId: number;
+}): Promise<ActionResult> {
+  const parsed = deleteNoteInput.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: firstIssueMessage(parsed.error),
+      canRetry: false,
+    };
+  }
+
+  const { noteId } = parsed.data;
+  try {
+    const deleted = await notesRepo.deleteNote(noteId);
+    revalidatePath("/");
+    if (!deleted) {
+      log.warn("notes", "note.missing", { noteId });
+      return { ok: false, error: "Этой заметки уже нет", canRetry: false };
+    }
+    log.info("notes", "note.deleted", { noteId });
+    return { ok: true };
+  } catch (error) {
+    log.error("notes", "note.delete_failed", error, { noteId });
+    return { ok: false, error: "Не удалось удалить заметку", canRetry: true };
+  }
+}
+
+// The notes of the contact go with it: the foreign key is ON DELETE CASCADE.
+export async function deleteContact(input: {
+  contactId: number;
+}): Promise<ActionResult> {
+  const parsed = deleteContactInput.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: firstIssueMessage(parsed.error),
+      canRetry: false,
+    };
+  }
+
+  const { contactId } = parsed.data;
+  try {
+    const deleted = await contactsRepo.deleteContact(contactId);
+    revalidatePath("/");
+    if (!deleted) {
+      log.warn("contacts", "contact.missing", { contactId });
+      return {
+        ok: false,
+        error: "Такого контакта больше нет",
+        canRetry: false,
+      };
+    }
+    log.info("contacts", "contact.deleted", { contactId });
+    return { ok: true };
+  } catch (error) {
+    log.error("contacts", "contact.delete_failed", error, { contactId });
+    return { ok: false, error: "Не удалось удалить контакт", canRetry: true };
   }
 }

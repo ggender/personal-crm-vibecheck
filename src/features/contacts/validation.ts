@@ -25,6 +25,15 @@ export const noteBody = z
 
 export const addNoteInput = z.object({ contactId, body: noteBody });
 
+export const deleteNoteInput = z.object({
+  noteId: z
+    .number({ error: "Не удалось понять, какая это заметка" })
+    .int({ error: "Не удалось понять, какая это заметка" })
+    .positive({ error: "Не удалось понять, какая это заметка" }),
+});
+
+export const deleteContactInput = z.object({ contactId });
+
 function optionalText(limit: number, label: string) {
   return z
     .string()

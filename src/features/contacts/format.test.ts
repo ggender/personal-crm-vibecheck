@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  deleteContactQuestion,
+  deleteNoteQuestion,
   formatContactCount,
   formatFoundCount,
+  formatNoteCount,
   formatNoteDate,
   formatTodayLabel,
   initials,
@@ -83,6 +86,55 @@ describe("formatTodayLabel", () => {
   it("names today with its date", () => {
     expect(formatTodayLabel(new Date(2026, 8, 17, 15, 0))).toBe(
       "сегодня, 17 сентября",
+    );
+  });
+});
+
+describe("formatNoteCount", () => {
+  it.each([
+    [1, "1 заметка"],
+    [2, "2 заметки"],
+    [3, "3 заметки"],
+    [5, "5 заметок"],
+    [11, "11 заметок"],
+    [21, "21 заметка"],
+  ])("%i → %s", (count, text) => {
+    expect(formatNoteCount(count)).toBe(text);
+  });
+});
+
+describe("deleteContactQuestion", () => {
+  it("names the contact and how many notes go with it", () => {
+    expect(deleteContactQuestion("Анна Петрова", 3)).toBe(
+      "Удалить контакт «Анна Петрова» и 3 заметки?",
+    );
+    expect(deleteContactQuestion("Анна Петрова", 1)).toBe(
+      "Удалить контакт «Анна Петрова» и 1 заметку?",
+    );
+  });
+
+  it("asks a short question when there are no notes", () => {
+    expect(deleteContactQuestion("Анна Петрова", 0)).toBe(
+      "Удалить контакт «Анна Петрова»?",
+    );
+  });
+});
+
+describe("deleteNoteQuestion", () => {
+  const now = new Date(2026, 8, 17, 12, 0);
+
+  it("names the note by its date", () => {
+    expect(deleteNoteQuestion(new Date(2026, 8, 17, 9, 0), now)).toBe(
+      "Удалить сегодняшнюю заметку?",
+    );
+    expect(deleteNoteQuestion(new Date(2026, 8, 16, 9, 0), now)).toBe(
+      "Удалить вчерашнюю заметку?",
+    );
+    expect(deleteNoteQuestion(new Date(2026, 8, 3, 9, 0), now)).toBe(
+      "Удалить заметку от 3 сентября?",
+    );
+    expect(deleteNoteQuestion(new Date(2025, 4, 17, 9, 0), now)).toBe(
+      "Удалить заметку от 17 мая 2025?",
     );
   });
 });

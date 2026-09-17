@@ -14,7 +14,8 @@ vi.mock("./data/contacts-repo", () => ({
 const { revalidatePath } = await import("next/cache");
 const notesRepo = await import("./data/notes-repo");
 const contactsRepo = await import("./data/contacts-repo");
-const { addNote, createContact, updateContact } = await import("./actions");
+const { addNote, createContact, updateContact, deleteNote, deleteContact } =
+  await import("./actions");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -144,5 +145,60 @@ describe("updateContact action", () => {
       error: "Не удалось сохранить изменения",
       canRetry: true,
     });
+  });
+});
+
+describe("deleteNote action", () => {
+  it("deletes the note and refreshes the page", async () => {
+    vi.mocked(notesRepo.deleteNote).mockResolvedValue(true);
+
+    expect(await deleteNote({ noteId: 5 })).toEqual({ ok: true });
+    expect(notesRepo.deleteNote).toHaveBeenCalledWith(5);
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("says when the note is already gone", async () => {
+    vi.mocked(notesRepo.deleteNote).mockResolvedValue(false);
+
+    expect(await deleteNote({ noteId: 5 })).toEqual({
+      ok: false,
+      error: "Этой заметки уже нет",
+      canRetry: false,
+    });
+  });
+
+  it("turns an unexpected failure into a retryable message", async () => {
+    vi.mocked(notesRepo.deleteNote).mockRejectedValue(new Error("locked"));
+
+    expect(await deleteNote({ noteId: 5 })).toEqual({
+      ok: false,
+      error: "Не удалось удалить заметку",
+      canRetry: true,
+    });
+  });
+});
+
+describe("deleteContact action", () => {
+  it("deletes the contact with its notes", async () => {
+    vi.mocked(contactsRepo.deleteContact).mockResolvedValue(true);
+
+    expect(await deleteContact({ contactId: 9 })).toEqual({ ok: true });
+    expect(contactsRepo.deleteContact).toHaveBeenCalledWith(9);
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("says when the contact is already gone", async () => {
+    vi.mocked(contactsRepo.deleteContact).mockResolvedValue(false);
+
+    expect(await deleteContact({ contactId: 9 })).toEqual({
+      ok: false,
+      error: "Такого контакта больше нет",
+      canRetry: false,
+    });
+  });
+
+  it("refuses a broken id without touching the database", async () => {
+    expect(await deleteContact({ contactId: 0 })).toMatchObject({ ok: false });
+    expect(contactsRepo.deleteContact).not.toHaveBeenCalled();
   });
 });
