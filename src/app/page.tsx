@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import type { ReactNode } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { ContactCard } from "@/features/contacts/components/contact-card";
+import { ContactForm } from "@/features/contacts/components/contact-form";
 import { ContactList } from "@/features/contacts/components/contact-list";
 import {
   ContactMissing,
@@ -66,13 +67,24 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   let rightPanel: ReactNode;
   if (screen.isNew) {
     rightPanel = (
-      <p className="p-8 text-muted-foreground">
-        Здесь будет форма нового контакта.
-      </p>
+      <ContactForm key="new" query={screen.q} suggestedName={screen.newName} />
+    );
+  } else if (card && screen.isEdit) {
+    rightPanel = (
+      <ContactForm
+        key={`edit-${card.contact.id}`}
+        query={screen.q}
+        contact={card.contact}
+      />
     );
   } else if (card) {
     rightPanel = (
-      <ContactCard contact={card.contact} notes={card.notes} now={now} />
+      <ContactCard
+        contact={card.contact}
+        notes={card.notes}
+        now={now}
+        query={screen.q}
+      />
     );
   } else if (isCardRequested) {
     rightPanel = <ContactMissing query={screen.q} />;

@@ -1,9 +1,11 @@
 import { Pencil, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Button, buttonVariants } from "@/components/ui/button";
 import type { Contact } from "../data/contacts-repo";
 import type { Note } from "../data/notes-repo";
 import { formatTodayLabel } from "../format";
+import { screenHref } from "../screen-url";
 import { NoteForm } from "./note-form";
 import { NotesFeed } from "./notes-feed";
 
@@ -11,6 +13,7 @@ type ContactCardProps = {
   contact: Contact;
   notes: Note[];
   now: Date;
+  query: string;
 };
 
 function Detail({ label, children }: { label: string; children: ReactNode }) {
@@ -27,7 +30,7 @@ function NotSet() {
 }
 
 // Order matters: the note comes before phone and email. This is not an address book.
-export function ContactCard({ contact, notes, now }: ContactCardProps) {
+export function ContactCard({ contact, notes, now, query }: ContactCardProps) {
   return (
     <article
       aria-labelledby="contact-name"
@@ -75,10 +78,14 @@ export function ContactCard({ contact, notes, now }: ContactCardProps) {
         </Detail>
       </dl>
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="lg" disabled>
+        <Link
+          href={screenHref({ q: query, contactId: contact.id, isEdit: true })}
+          scroll={false}
+          className={buttonVariants({ variant: "outline", size: "lg" })}
+        >
           <Pencil aria-hidden />
           Изменить
-        </Button>
+        </Link>
         <Button variant="destructive" size="lg" disabled>
           <Trash2 aria-hidden />
           Удалить контакт

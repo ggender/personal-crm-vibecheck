@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { LIMITS, addNoteInput, firstIssueMessage } from "./validation";
+import {
+  LIMITS,
+  addNoteInput,
+  createContactInput,
+  fieldErrors,
+  firstIssueMessage,
+  updateContactInput,
+} from "./validation";
 
 describe("addNoteInput", () => {
   it("trims the note text", () => {
@@ -39,5 +46,78 @@ describe("addNoteInput", () => {
         false,
       );
     }
+  });
+});
+
+describe("createContactInput", () => {
+  it("trims everything and fills optional fields", () => {
+    expect(
+      createContactInput.parse({
+        name: "  Марк Орлов ",
+        metContext: " Митап по Next.js ",
+        phone: " +7 900 555-00-00 ",
+        email: " mark@example.com ",
+        firstNote: "  Пришлёт ссылку  ",
+      }),
+    ).toEqual({
+      name: "Марк Орлов",
+      metContext: "Митап по Next.js",
+      phone: "+7 900 555-00-00",
+      email: "mark@example.com",
+      firstNote: "Пришлёт ссылку",
+    });
+    expect(createContactInput.parse({ name: "Марк" })).toMatchObject({
+      metContext: "",
+      phone: "",
+      email: "",
+      firstNote: "",
+    });
+  });
+
+  it("names the field with the problem", () => {
+    const result = createContactInput.safeParse({
+      name: "   ",
+      email: "mark.example.com",
+    });
+    expect(result.success).toBe(false);
+    expect(fieldErrors(result.error!)).toEqual({
+      name: "Укажи имя",
+      email: "В почте должен быть знак @",
+    });
+  });
+
+  it("accepts an empty email but not a too long one", () => {
+    expect(
+      createContactInput.safeParse({ name: "Марк", email: "" }).success,
+    ).toBe(true);
+    const long = createContactInput.safeParse({
+      name: "Марк",
+      email: `${"я".repeat(LIMITS.email)}@example.com`,
+    });
+    expect(fieldErrors(long.error!).email).toContain("длиннее");
+  });
+
+  it("refuses a name longer than 200 characters", () => {
+    expect(
+      createContactInput.safeParse({ name: "я".repeat(200) }).success,
+    ).toBe(true);
+    expect(
+      fieldErrors(
+        createContactInput.safeParse({ name: "я".repeat(201) }).error!,
+      ).name,
+    ).toBe("Имя длиннее 200 знаков — сократи его");
+  });
+});
+
+describe("updateContactInput", () => {
+  it("needs a contact id and has no first note", () => {
+    expect(updateContactInput.parse({ id: 4, name: "Марк" })).toEqual({
+      id: 4,
+      name: "Марк",
+      metContext: "",
+      phone: "",
+      email: "",
+    });
+    expect(updateContactInput.safeParse({ name: "Марк" }).success).toBe(false);
   });
 });
