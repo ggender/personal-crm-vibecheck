@@ -28,16 +28,28 @@ export function SearchInput({ query, focusOnLoad }: SearchInputProps) {
   const [value, setValue] = useState(query);
   const [sentQuery, setSentQuery] = useState(query);
   const [seenQuery, setSeenQuery] = useState(query);
+  // Set when the address changed from outside; the effect writes it into the
+  // field. The field itself is uncontrolled, otherwise a re-render of the long
+  // list can overwrite letters typed while it was rendering.
+  const [textFromAddress, setTextFromAddress] = useState<{ text: string }>({
+    text: query,
+  });
 
-  // The address changed from outside (e.g. a new contact reset the search).
-  // Our own requests echo back and must not overwrite what is being typed.
   if (query !== seenQuery) {
     setSeenQuery(query);
+    // Our own request echoes back and must not touch what is being typed.
     if (query !== sentQuery) {
       setValue(query);
       setSentQuery(query);
+      setTextFromAddress({ text: query });
     }
   }
+
+  useEffect(() => {
+    if (inputRef.current && inputRef.current.value !== textFromAddress.text) {
+      inputRef.current.value = textFromAddress.text;
+    }
+  }, [textFromAddress]);
 
   useEffect(() => {
     if (focusOnLoad) {
@@ -87,7 +99,7 @@ export function SearchInput({ query, focusOnLoad }: SearchInputProps) {
         id="contact-search"
         name="q"
         type="search"
-        value={value}
+        defaultValue={query}
         onChange={(event) => setValue(event.target.value)}
         placeholder="Поиск по имени…"
         autoComplete="off"

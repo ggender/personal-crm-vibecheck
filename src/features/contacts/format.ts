@@ -31,3 +31,40 @@ export function initials(name: string): string {
     .join("")
     .toUpperCase();
 }
+
+const dayMonthFormat = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "long",
+});
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+// Calendar days in this computer's time zone: 00:05 today is "сегодня",
+// 23:50 of the day before is "вчера".
+export function formatNoteDate(date: Date, now: Date = new Date()): string {
+  if (isSameDay(date, now)) {
+    return "сегодня";
+  }
+  const yesterday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - 1,
+  );
+  if (isSameDay(date, yesterday)) {
+    return "вчера";
+  }
+  const dayMonth = dayMonthFormat.format(date);
+  return date.getFullYear() === now.getFullYear()
+    ? dayMonth
+    : `${dayMonth} ${date.getFullYear()}`;
+}
+
+export function formatTodayLabel(now: Date = new Date()): string {
+  return `сегодня, ${dayMonthFormat.format(now)}`;
+}

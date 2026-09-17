@@ -3,6 +3,7 @@ import type { ContactListItem } from "../data/contacts-repo";
 import { formatContactCount, formatFoundCount, initials } from "../format";
 import { screenHref } from "../screen-url";
 import { NoContactsYet, NoSearchResults } from "./empty-states";
+import { ScrollToSelected } from "./scroll-to-selected";
 
 type ContactListProps = {
   contacts: ContactListItem[];
@@ -46,6 +47,7 @@ export function ContactList({
                   scroll={false}
                   prefetch={false}
                   aria-current={isSelected ? "page" : undefined}
+                  data-contact-id={contact.id}
                   className="flex items-center gap-3 px-4 py-2.5 outline-none hover:bg-muted focus-visible:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset aria-[current=page]:bg-accent aria-[current=page]:shadow-[inset_3px_0_0_var(--primary)]"
                 >
                   <span
@@ -70,6 +72,7 @@ export function ContactList({
           })}
         </ul>
       )}
+      <ScrollToSelected selectedId={selectedId} />
     </div>
   );
 }

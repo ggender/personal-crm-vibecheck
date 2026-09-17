@@ -1,14 +1,21 @@
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { connection } from "next/server";
+import type { ReactNode } from "react";
 import { buttonVariants } from "@/components/ui/button";
+import { ContactCard } from "@/features/contacts/components/contact-card";
 import { ContactList } from "@/features/contacts/components/contact-list";
-import { StartHint } from "@/features/contacts/components/empty-states";
+import {
+  ContactMissing,
+  StartHint,
+} from "@/features/contacts/components/empty-states";
 import { SearchInput } from "@/features/contacts/components/search-input";
 import {
   countContacts,
+  getContact,
   searchContacts,
 } from "@/features/contacts/data/contacts-repo";
+import { listNotes } from "@/features/contacts/data/notes-repo";
 import { splitSearchQuery } from "@/features/contacts/normalize-name";
 import {
   readScreenState,
@@ -17,31 +24,61 @@ import {
 } from "@/features/contacts/screen-url";
 import { log } from "@/lib/log";
 
-async function loadList(screen: ScreenState) {
+async function loadScreen(screen: ScreenState) {
   try {
     const startedAt = performance.now();
-    const [contacts, total] = await Promise.all([
+    const [contacts, total, card] = await Promise.all([
       searchContacts(screen.q),
       countContacts(),
+      loadCard(screen.contactId),
     ]);
     log.debug("contacts", "contacts.searched", {
       queryLength: screen.q.length,
       resultCount: contacts.length,
       ms: Math.round(performance.now() - startedAt),
     });
-    return { contacts, total };
+    return { contacts, total, card };
   } catch (error) {
     log.error("db", "page.load_failed", error);
     throw error;
   }
 }
 
+async function loadCard(contactId: number | null) {
+  if (contactId === null) {
+    return null;
+  }
+  const [contact, notes] = await Promise.all([
+    getContact(contactId),
+    listNotes(contactId),
+  ]);
+  return contact ? { contact, notes } : null;
+}
+
 export default async function HomePage({ searchParams }: PageProps<"/">) {
   // The database is read on every request, never at build time.
   await connection();
   const screen = readScreenState(await searchParams);
-  const { contacts, total } = await loadList(screen);
-  const isCardOpen = screen.contactParam !== null;
+  const { contacts, total, card } = await loadScreen(screen);
+  const isCardRequested = screen.contactParam !== null;
+  const now = new Date();
+
+  let rightPanel: ReactNode;
+  if (screen.isNew) {
+    rightPanel = (
+      <p className="p-8 text-muted-foreground">
+        Здесь будет форма нового контакта.
+      </p>
+    );
+  } else if (card) {
+    rightPanel = (
+      <ContactCard contact={card.contact} notes={card.notes} now={now} />
+    );
+  } else if (isCardRequested) {
+    rightPanel = <ContactMissing query={screen.q} />;
+  } else {
+    rightPanel = <StartHint />;
+  }
 
   return (
     <div className="flex min-h-dvh flex-col md:h-dvh">
@@ -63,7 +100,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
           <div className="flex items-center gap-2 border-b p-3">
             <SearchInput
               query={screen.q}
-              focusOnLoad={!isCardOpen && !screen.isNew}
+              focusOnLoad={!isCardRequested && !screen.isNew}
             />
             <Link
               href={screenHref({ q: screen.q, isNew: true })}
@@ -84,20 +121,14 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
             total={total}
             query={screen.q}
             isSearching={splitSearchQuery(screen.q).length > 0}
-            selectedId={screen.contactId}
+            selectedId={card ? card.contact.id : null}
           />
         </section>
         <section
           aria-label="Карточка контакта"
           className="min-h-0 md:overflow-y-auto"
         >
-          {screen.isNew ? (
-            <p className="p-8 text-muted-foreground">
-              Здесь будет форма нового контакта.
-            </p>
-          ) : (
-            <StartHint />
-          )}
+          {rightPanel}
         </section>
       </main>
     </div>

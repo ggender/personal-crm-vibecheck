@@ -55,3 +55,25 @@ export function NoContactsYet() {
     </div>
   );
 }
+
+export function ContactMissing({ query }: { query: string }) {
+  return (
+    <div className="grid h-full min-h-64 place-items-center p-8 text-center">
+      <div className="max-w-sm">
+        <h2 className="font-heading text-2xl leading-snug font-semibold">
+          Такого контакта больше нет
+        </h2>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Возможно, его удалили в другой вкладке или ссылка неправильная. Список
+          контактов работает как обычно.
+        </p>
+        <Link
+          href={screenHref({ q: query })}
+          className={buttonVariants({ variant: "outline", className: "mt-4" })}
+        >
+          К списку
+        </Link>
+      </div>
+    </div>
+  );
+}
