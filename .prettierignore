@@ -1,0 +1,14 @@
+# Product docs and tool files are not formatted
+specs/
+.claude/
+AGENTS.md
+
+# Generated
+.next/
+node_modules/
+package-lock.json
+src/db/migrations/
+next-env.d.ts
+
+# Database files
+data/

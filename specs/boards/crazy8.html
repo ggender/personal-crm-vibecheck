@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Личная CRM: Crazy 8</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────
+   vibe-check diagram engine, shared design layer
+   Built on the ClearList design system tokens.
+   FigJam structure (sticky notes, tape, dots, dotted canvas)
+   + Minimalist Editorial typography (DM Sans / DM Serif Display).
+   One file, many diagram templates.
+   ───────────────────────────────────────────────────────── */
+
+:root{
+  /* canvas */
+  --canvas:#F9F6F0;          /* warm FigJam canvas */
+  --canvas-app:#F9F9F8;      /* editorial / blueprint canvas */
+  --dot:#ddd6c6;
+  --grid-line:rgba(44,100,227,.10);
+
+  /* ink */
+  --charcoal:#1A1A1B;
+  --ink-2:#4b5563;
+  --ink-muted:#6B7280;
+  --border:#E5E5E5;
+
+  /* brand */
+  --blue:#2C64E3;
+  --blue-hover:#2354C2;
+  --purple:#8B5CF6;
+  --purple-light:#F5F3FF;
+  --pink:#ec4899;
+
+  /* moving-sale / figjam */
+  --kraft:#C4A882;
+  --kraft-dark:#A98C63;
+  --tape-blue:#4A90D9;
+  --y:#FFF6A8;   /* softened post-it yellow for sans legibility */
+  --g:#A6E4A0;
+  --b:#A8DBEE;
+  --o:#FFCB7D;
+  --p:#FFA8CC;
+  --lav:#CDBEEA; /* AI = purple family */
+
+  /* status dots */
+  --dot-red:#E03C31;
+  --dot-green:#2E8B57;
+  --dot-amber:#F6C90E;
+
+  /* fonts */
+  --sans:"DM Sans",ui-sans-serif,system-ui,sans-serif;
+  --serif:"DM Serif Display",Georgia,serif;
+}
+
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:1920px;height:1080px;overflow:hidden;}
+body{font-family:var(--sans);color:var(--charcoal);-webkit-font-smoothing:antialiased;}
+
+/* canvases */
+.canvas-dots{
+  background-color:var(--canvas);
+  background-image:radial-gradient(var(--dot) 2px,transparent 2px);
+  background-size:30px 30px;background-position:-6px -6px;
+}
+.canvas-blueprint{
+  background-color:var(--canvas-app);
+  background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);
+  background-size:48px 48px;
+}
+
+.stage{width:1920px;height:1080px;padding:40px 52px 34px;position:relative;display:flex;flex-direction:column;}
+
+/* ── header ───────────────────────────────── */
+.head{display:flex;align-items:flex-start;justify-content:space-between;flex:0 0 auto;}
+.head .crumb{font-weight:700;font-size:14px;letter-spacing:.18em;text-transform:uppercase;color:var(--blue);margin-bottom:6px;}
+.head .title{font-family:var(--serif);font-size:46px;line-height:1.02;color:var(--charcoal);}
+.head .sub{font-size:19px;color:var(--ink-muted);margin-top:10px;max-width:760px;}
+.madeby{text-align:right;font-size:15px;color:var(--ink-muted);line-height:1.3;text-decoration:none;}
+.madeby:hover b{text-decoration:underline;}
+.madeby b{font-weight:700;color:var(--blue);letter-spacing:.02em;}
+.madeby .url{color:var(--blue);font-weight:600;}
+
+/* ── sticky note ──────────────────────────── */
+.note{
+  background:var(--y);
+  padding:13px 15px 14px;
+  box-shadow:3px 4px 12px rgba(0,0,0,.13);
+  position:relative;line-height:1.24;font-size:19px;font-weight:500;
+  border-radius:1px;
+}
+.note .k{display:block;font-weight:700;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:rgba(0,0,0,.40);margin-bottom:5px;}
+.note.sm{font-size:17px;padding:10px 13px;box-shadow:2px 3px 9px rgba(0,0,0,.11);}
+.note.lg{font-size:21px;}
+.note.y{background:var(--y);} .note.g{background:var(--g);} .note.b{background:var(--b);}
+.note.o{background:var(--o);} .note.p{background:var(--p);} .note.ai{background:var(--lav);}
+/* gentle hand-placed tilt + a tape nub */
+.tilt-l{transform:rotate(-1.3deg);} .tilt-r{transform:rotate(1.1deg);} .tilt-0{transform:rotate(-.4deg);}
+.note.pin:before{content:"";position:absolute;top:-7px;left:50%;width:34px;height:12px;
+  background:rgba(74,144,217,.78);transform:translateX(-50%) rotate(-4deg);box-shadow:1px 1px 3px rgba(0,0,0,.18);}
+
+/* ── tape strip / lane label ──────────────── */
+.tape{display:inline-block;background:var(--tape-blue);color:#fff;font-weight:700;text-transform:uppercase;
+  letter-spacing:.06em;padding:9px 16px;box-shadow:2px 3px 9px rgba(0,0,0,.16);position:relative;}
+.tape:before,.tape:after{content:"";position:absolute;top:0;bottom:0;width:14px;
+  background:repeating-linear-gradient(135deg,rgba(255,255,255,.28) 0 4px,transparent 4px 8px);}
+.tape:before{left:-7px;transform:skewX(-12deg);} .tape:after{right:-7px;transform:skewX(-12deg);}
+.tape.green{background:var(--dot-green);} .tape.kraftt{background:#b9b09c;} .tape.charcoal{background:var(--charcoal);}
+
+/* ── editorial / blueprint box ────────────── */
+.ebox{background:#fff;border:2px solid var(--charcoal);padding:14px 16px;min-width:160px;position:relative;}
+.ebox .t{font-weight:700;font-size:19px;line-height:1.15;}
+.ebox .s{font-size:15px;color:var(--ink-muted);margin-top:4px;line-height:1.25;}
+.ebox.ai{background:var(--purple-light);border-color:var(--purple);}
+.ebox.ai .tag{position:absolute;top:-11px;left:14px;background:var(--purple);color:#fff;font-size:11px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;padding:2px 8px;}
+.ebox.accent{border-color:var(--blue);}
+
+/* ── garage-sale dot sticker ──────────────── */
+.dot{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;color:#fff;
+  font-weight:700;text-align:center;line-height:1;box-shadow:2px 2px 6px rgba(0,0,0,.22);}
+.dot.red{background:var(--dot-red);} .dot.green{background:var(--dot-green);}
+.dot.amber{background:var(--dot-amber);color:#3a2e00;} .dot.blue{background:var(--tape-blue);}
+
+/* small legend chip */
+.chip{display:inline-flex;align-items:center;gap:8px;font-size:15px;color:var(--ink-2);font-weight:500;}
+.chip .sw{width:16px;height:16px;border-radius:50%;}
+
+</style>
+<style>
+  :root{ --win-bar:#ECECEA; --ph:#dededa; --ph-tx:#9a9a93; --win-border:#1A1A1B; --hl:#EEF3FE; }
+  .stage{padding:32px 48px 22px;transform-origin:0 0;}
+  .head .crumb{color:var(--blue);}
+  .head .sub{max-width:1180px;}
+  .madeby2{position:absolute;right:48px;top:38px;font-size:14px;color:var(--ink-muted);text-decoration:none;}
+  .madeby2:hover b{text-decoration:underline;} .madeby2 b{color:var(--blue);font-weight:700;}
+
+  .board{flex:1;display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);gap:20px 28px;margin-top:14px;min-height:0;}
+  .card{display:flex;flex-direction:column;gap:8px;min-height:0;}
+  .dir{align-self:flex-start;background:var(--charcoal);color:#fff;font-weight:700;font-size:15px;letter-spacing:.03em;
+    padding:6px 13px;transform:rotate(-.6deg);box-shadow:2px 2px 6px rgba(0,0,0,.16);}
+  .bestfor{font-size:14.5px;color:var(--ink-2);font-weight:500;line-height:1.35;}
+  .bestfor b{color:var(--charcoal);} .bestfor .cost{color:#9a3412;}
+
+  /* desktop browser window */
+  .win{flex:1;background:#fff;border:2px solid var(--win-border);display:flex;flex-direction:column;overflow:hidden;min-height:0;}
+  .winbar{height:30px;flex:0 0 auto;background:var(--win-bar);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 12px;}
+  .dots{display:flex;gap:6px;} .dots i{width:10px;height:10px;border-radius:50%;background:#c9c9c5;}
+  .url{flex:1;height:18px;background:#fff;border:1px solid var(--border);font-size:11px;color:var(--ink-muted);display:flex;align-items:center;padding:0 9px;}
+  .wc{flex:1;min-height:0;overflow:hidden;position:relative;display:flex;flex-direction:column;}
+
+  /* shared bits */
+  .tbar{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);flex:0 0 auto;}
+  .ttl{font-weight:700;font-size:15px;color:var(--charcoal);}
+  .cnt{font-size:12px;color:var(--ink-muted);font-weight:600;}
+  .srch{flex:1;height:28px;border:1.5px solid var(--charcoal);display:flex;align-items:center;padding:0 10px;font-size:13px;color:var(--ink-muted);background:#fff;}
+  .srch.on{color:var(--charcoal);border-color:var(--blue);box-shadow:0 0 0 3px var(--hl);}
+  .srch .cur{display:inline-block;width:1.5px;height:15px;background:var(--blue);margin-left:1px;}
+  .btn{background:var(--blue);color:#fff;font-size:12.5px;font-weight:700;padding:7px 13px;white-space:nowrap;}
+  .btn.ghost{background:#fff;color:var(--charcoal);border:1.5px solid var(--charcoal);padding:5.5px 11px;}
+  .av{width:24px;height:24px;border-radius:50%;background:var(--ph);color:#6b6b64;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+  .muted{color:var(--ink-muted);}
+
+  /* 1 table list */
+  .trow{display:grid;grid-template-columns:220px 210px 1fr;gap:12px;align-items:center;padding:7px 14px;border-bottom:1px solid var(--border);font-size:13px;color:var(--charcoal);}
+  .trow.h{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-muted);padding:6px 14px;background:#FAFAF9;}
+  .trow .nm{display:flex;align-items:center;gap:8px;font-weight:600;}
+  .trow .nt{color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+  /* 2 split */
+  .split{display:flex;flex:1;min-height:0;}
+  .side{width:34%;border-right:1px solid var(--border);display:flex;flex-direction:column;}
+  .side .tbar{padding:8px 10px;}
+  .li{display:flex;gap:8px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border);font-size:13px;color:var(--charcoal);}
+  .li.sel{background:var(--hl);font-weight:700;box-shadow:inset 3px 0 0 var(--blue);}
+  .li small{display:block;font-size:11px;color:var(--ink-muted);font-weight:500;}
+  .detail{flex:1;padding:12px 16px;display:flex;flex-direction:column;gap:8px;min-width:0;}
+  .d-h{display:flex;align-items:baseline;gap:10px;}
+  .d-t{font-weight:700;font-size:18px;color:var(--charcoal);}
+  .d-m{font-size:12.5px;color:var(--ink-2);}
+  .nbox{border:1.5px solid var(--blue);box-shadow:0 0 0 3px var(--hl);padding:8px 10px;font-size:13px;color:var(--charcoal);display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .note-i{border-left:3px solid var(--ph);padding:2px 0 2px 10px;font-size:12.5px;color:var(--charcoal);line-height:1.35;}
+  .note-i .dt{display:block;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-muted);}
+
+  /* 3 search-first */
+  .center{flex:1;display:flex;flex-direction:column;align-items:center;padding:20px 0 0;gap:0;background:#FAFAF9;}
+  .q{font-family:var(--serif);font-size:24px;color:var(--charcoal);margin-bottom:10px;}
+  .bigs{width:62%;height:40px;border:2px solid var(--blue);box-shadow:0 0 0 4px var(--hl);background:#fff;display:flex;align-items:center;padding:0 14px;font-size:16px;color:var(--charcoal);}
+  .drop{width:62%;background:#fff;border:1.5px solid var(--charcoal);border-top:0;}
+  .drop .li{padding:8px 14px;}
+  .drop .li.sel{box-shadow:none;}
+  .drop .key{margin-left:auto;font-size:10.5px;font-weight:700;color:var(--ink-muted);border:1px solid var(--border);padding:1px 6px;background:#fff;}
+  .rec{display:flex;gap:8px;align-items:center;margin-top:14px;font-size:12px;color:var(--ink-muted);}
+  .pill{background:#fff;border:1px solid var(--border);padding:4px 10px;font-size:12px;color:var(--charcoal);font-weight:600;}
+
+  /* 4 notes feed */
+  .feed{flex:1;display:flex;flex-direction:column;min-width:0;}
+  .quick{display:flex;gap:8px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--border);}
+  .who{border:1.5px solid var(--charcoal);height:28px;display:flex;align-items:center;padding:0 9px;font-size:12.5px;font-weight:600;white-space:nowrap;}
+  .day{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-muted);padding:7px 14px 3px;}
+  .fi{display:flex;gap:9px;padding:6px 14px;font-size:13px;color:var(--charcoal);line-height:1.35;}
+  .fi b{font-weight:700;}
+  .side.r{border-right:0;border-left:1px solid var(--border);width:27%;}
+
+  .pickline{text-align:center;font-size:16px;color:var(--ink-2);margin-top:12px;font-weight:500;}
+  .pickline b{color:var(--charcoal);}
+</style>
+</head>
+<body class="canvas-dots">
+<div class="stage" id="stage">
+  <div class="head">
+    <div>
+      <div class="crumb">Фаза 2 · Crazy 8 · Веб-приложение</div>
+      <div class="title">Четыре способа, как может ощущаться твоя CRM</div>
+      <div class="sub">Один и тот же момент на всех четырёх: ты только что поговорил с Анной и хочешь быстро найти её и дописать заметку. Смотри, где это короче и спокойнее всего.</div>
+    </div>
+  </div>
+  <a class="madeby2" href="https://github.com/TexasBedouin/vibe-check" target="_blank" rel="noopener noreferrer">Created using <b>Vibe-Check</b> skill</a>
+
+  <div class="board">
+
+    <!-- 1 table list -->
+    <div class="card">
+      <div class="dir">1 · Список-таблица</div>
+      <div class="win">
+        <div class="winbar"><span class="dots"><i></i><i></i><i></i></span><span class="url">localhost:3000</span></div>
+        <div class="wc">
+          <div class="tbar"><span class="ttl">Контакты</span><span class="cnt">999</span><span class="srch">Поиск по имени…</span><span class="btn">+ Добавить</span></div>
+          <div class="trow h"><span>Имя</span><span>Откуда знакомы</span><span>Последняя заметка</span></div>
+          <div class="trow"><span class="nm"><span class="av">АП</span>Анна Петрова</span><span>Конференция ProductCamp</span><span class="nt">Договорились созвониться в октябре про её стартап</span></div>
+          <div class="trow"><span class="nm"><span class="av">БК</span>Борис Ковалёв</span><span>Бывший коллега, Яндекс</span><span class="nt">Ищет дизайнера, обещал скинуть вакансию</span></div>
+          <div class="trow"><span class="nm"><span class="av">ВС</span>Вера Соколова</span><span>Соседка по даче</span><span class="nt">Вернуть дрель до конца месяца</span></div>
+          <div class="trow"><span class="nm"><span class="av">ГМ</span>Глеб Морозов</span><span>Университет, группа 304</span><span class="nt">Зовёт на встречу выпускников 12 ноября</span></div>
+          <div class="trow"><span class="nm"><span class="av">ДЛ</span>Дарья Лебедева</span><span>Через Бориса</span><span class="nt">Юрист, можно спросить про договор аренды</span></div>
+          <div class="trow"><span class="nm"><span class="av">ЕН</span>Егор Новиков</span><span>Спортзал</span><span class="nt muted">заметок пока нет</span></div>
+        </div>
+      </div>
+      <div class="bestfor"><b>Сильная сторона:</b> сразу видно всех и последний контекст по каждому. <span class="cost">Цена:</span> чтобы дописать заметку — клик по строке, отдельная страница карточки, потом назад.</div>
+    </div>
+
+    <!-- 2 split list + card -->
+    <div class="card">
+      <div class="dir">2 · Список слева, карточка справа</div>
+      <div class="win">
+        <div class="winbar"><span class="dots"><i></i><i></i><i></i></span><span class="url">localhost:3000/?contact=anna-petrova</span></div>
+        <div class="wc">
+          <div class="split">
+            <div class="side">
+              <div class="tbar"><span class="srch on">анн<span class="cur"></span></span><span class="btn ghost">+</span></div>
+              <div class="li sel"><span class="av">АП</span><span>Анна Петрова<small>Конференция ProductCamp</small></span></div>
+              <div class="li"><span class="av">АЖ</span><span>Анна Жукова<small>Курс по аналитике</small></span></div>
+              <div class="li"><span class="av">ЖА</span><span>Жанна Агеева<small>Подруга сестры</small></span></div>
+              <div class="li"><span class="av">ИА</span><span>Иван Аннин<small>Клиент, 2024</small></span></div>
+            </div>
+            <div class="detail">
+              <div class="d-h"><span class="d-t">Анна Петрова</span><span class="d-m">+7 916 555-01-42 · anna@example.com</span></div>
+              <div class="d-m"><b>Откуда знакомы:</b> конференция ProductCamp, май 2025</div>
+              <div class="nbox"><span>Созвонились: запускает пилот в ноябре, просила интро к Борису<span class="cur" style="display:inline-block;width:1.5px;height:14px;background:var(--blue);vertical-align:-2px"></span></span><span class="btn">Сохранить</span></div>
+              <div class="note-i"><span class="dt">3 сентября</span>Договорились созвониться в октябре про её стартап</div>
+              <div class="note-i"><span class="dt">17 мая</span>Познакомились на ProductCamp, делает сервис для репетиторов</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="bestfor"><b>Сильная сторона:</b> нашёл → кликнул → пишешь заметку, всё на одном экране, список не пропадает. <span class="cost">Цена:</span> на телефоне две колонки не влезут — там будет по очереди.</div>
+    </div>
+
+    <!-- 3 search-first -->
+    <div class="card">
+      <div class="dir">3 · Сначала поиск</div>
+      <div class="win">
+        <div class="winbar"><span class="dots"><i></i><i></i><i></i></span><span class="url">localhost:3000</span></div>
+        <div class="wc">
+          <div class="center">
+            <div class="q">С кем ты только что говорил?</div>
+            <div class="bigs">анн<span class="cur" style="display:inline-block;width:2px;height:20px;background:var(--blue);margin-left:1px"></span></div>
+            <div class="drop">
+              <div class="li sel"><span class="av">АП</span><span>Анна Петрова<small>Конференция ProductCamp</small></span><span class="key">Enter ↵</span></div>
+              <div class="li"><span class="av">АЖ</span><span>Анна Жукова<small>Курс по аналитике</small></span></div>
+              <div class="li"><span class="av">ЖА</span><span>Жанна Агеева<small>Подруга сестры</small></span></div>
+            </div>
+            <div class="rec">Недавние: <span class="pill">Борис Ковалёв</span><span class="pill">Вера Соколова</span><span class="pill">Глеб Морозов</span><span class="pill">Все 999 →</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="bestfor"><b>Сильная сторона:</b> самый быстрый путь с клавиатуры: открыл, три буквы, Enter. <span class="cost">Цена:</span> списка на первом экране нет — а в твоём критерии успеха «открыл → видно список всех контактов».</div>
+    </div>
+
+    <!-- 4 notes feed -->
+    <div class="card">
+      <div class="dir">4 · Лента заметок</div>
+      <div class="win">
+        <div class="winbar"><span class="dots"><i></i><i></i><i></i></span><span class="url">localhost:3000</span></div>
+        <div class="wc">
+          <div class="split">
+            <div class="feed">
+              <div class="quick"><span class="who">Кому: Анна Петрова ▾</span><span class="srch">Что обсудили?…</span><span class="btn">Записать</span></div>
+              <div class="day">Сегодня</div>
+              <div class="fi"><span class="av">БК</span><span><b>Борис Ковалёв</b> — ищет дизайнера, обещал скинуть вакансию</span></div>
+              <div class="day">Вчера</div>
+              <div class="fi"><span class="av">ВС</span><span><b>Вера Соколова</b> — вернуть дрель до конца месяца</span></div>
+              <div class="fi"><span class="av">ГМ</span><span><b>Глеб Морозов</b> — зовёт на встречу выпускников 12 ноября</span></div>
+              <div class="day">3 сентября</div>
+              <div class="fi"><span class="av">АП</span><span><b>Анна Петрова</b> — договорились созвониться в октябре про её стартап</span></div>
+            </div>
+            <div class="side r">
+              <div class="tbar"><span class="ttl" style="font-size:13px">Контакты</span><span class="cnt">999</span></div>
+              <div class="li"><span class="av">АП</span>Анна Петрова</div>
+              <div class="li"><span class="av">БК</span>Борис Ковалёв</div>
+              <div class="li"><span class="av">ВС</span>Вера Соколова</div>
+              <div class="li"><span class="av">ГМ</span>Глеб Морозов</div>
+              <div class="li"><span class="av">ДЛ</span>Дарья Лебедева</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="bestfor"><b>Сильная сторона:</b> главное — не люди, а договорённости: видно, что и кому ты обещал на этой неделе. <span class="cost">Цена:</span> это уже скорее дневник, чем список контактов; людей без заметок почти не видно.</div>
+    </div>
+  </div>
+
+  <div class="pickline">Не выбирай «один целиком». <b>Назови кусочки, которые понравились</b> в любом из четырёх — я сплавлю их в один экран.</div>
+</div>
+<script>
+  // fit the fixed 1920x1080 stage into any window
+  function fit(){var s=Math.min(innerWidth/1920,innerHeight/1080);document.getElementById('stage').style.transform='scale('+s+')';}
+  addEventListener('resize',fit);fit();
+</script>
+</body>
+</html>
