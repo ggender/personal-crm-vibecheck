@@ -4,6 +4,7 @@ specs/
 AGENTS.md
 
 # Generated
+test-results/
 .next/
 node_modules/
 package-lock.json

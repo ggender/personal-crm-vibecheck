@@ -46,6 +46,7 @@ npm run dev        # запустить приложение
 
 ```bash
 npm test              # автоматические тесты
+npm run test:e2e      # сценарии в браузере (первый раз: npx playwright install chromium)
 npm run lint          # линтер
 npm run format:check  # единый стиль кода
 npm run build         # сборка

@@ -27,7 +27,7 @@
 ## Определение готовности (каждое изменение проходит всё)
 
 - Работает и не сломало то, что работало раньше.
-- `npm run build`, `npm run lint`, `npm run format:check`, `npm test` — зелёные.
+- `npm run build`, `npm run lint`, `npm run format:check`, `npm test`, `npm run test:e2e` — зелёные.
 - Каждый тест падает на старом коде и проходит на новом (сначала красный).
 - Затронуто только то, что нужно задаче.
 - Имена и приёмы совпадают с остальным проектом.
@@ -38,6 +38,7 @@
 
 - `npm run dev` — приложение на http://localhost:3000
 - `npm test` · `npm run lint` · `npm run format:check` · `npm run build`
+- `npm run test:e2e` — сценарии в браузере (Playwright, `e2e/`): сам собирает приложение и поднимает его на :3100 со своей базой `data/e2e/crm.db`; `data/crm.db` не трогает
 - `npm run db:generate` — новая миграция после правки `src/db/schema.ts`
 - `npm run db:migrate` · `npm run db:seed` · `npm run db:reset` (удалить базу и собрать заново)
 - Файл базы: `data/crm.db` (другой путь — переменная `CRM_DB_PATH`)
