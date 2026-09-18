@@ -24,18 +24,19 @@ Example: `LOG_LEVEL=debug npm run dev`. Tests run with `silent`.
 
 ## Categories
 
-| Category   | What                                                       |
-| ---------- | ---------------------------------------------------------- |
-| `contacts` | list, search, create, update, delete contacts, mark talked |
-| `notes`    | add and delete notes                                       |
-| `db`       | opening the database, migrations, page load errors         |
-| `seed`     | seed and reset scripts                                     |
+| Category   | What                                                             |
+| ---------- | ---------------------------------------------------------------- |
+| `contacts` | list, search, create, update, delete contacts, mark talked       |
+| `notes`    | add and delete notes                                             |
+| `db`       | connections, creating the database, migrations, page load errors |
+| `seed`     | seed and reset scripts                                           |
 
 ## Events
 
 Name events `<thing>.<what_happened>` in past tense, snake_case after the dot:
 `contact.created`, `contact.updated`, `contact.deleted`, `contact.talked`, `note.added`, `note.deleted`,
-`note.rejected`, `note.add_failed`, `db.opened`, `db.migrated`, `page.load_failed`, `seed.done`, `seed.skipped`.
+`note.rejected`, `note.add_failed`, `db.pool_created`, `db.pool_error`, `db.created`, `db.migrated`, `page.load_failed`,
+`seed.done`, `seed.skipped`.
 
 What to log:
 

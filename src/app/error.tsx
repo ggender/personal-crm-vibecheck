@@ -1,7 +1,8 @@
 "use client";
 
-// Shown when the screen could not be built — most often the database file is
-// missing or unreadable. The server has already written an ERROR line to the log.
+// Shown when the screen could not be built — most often Postgres is not
+// running or the database is missing. The server has already written an
+// ERROR line to the log.
 export default function ErrorScreen({
   error,
   retry,
@@ -17,7 +18,7 @@ export default function ErrorScreen({
         </h1>
         <p className="text-muted-foreground">
           Приложение не смогло открыть базу с контактами. Данные никуда не
-          делись — они лежат в файле <code>data/crm.db</code>.
+          делись — они хранятся в базе Postgres.
         </p>
         <button
           type="button"
@@ -27,9 +28,10 @@ export default function ErrorScreen({
           Попробовать снова
         </button>
         <p className="text-sm text-muted-foreground">
-          Если не помогает: посмотри окно, где запущено приложение, — там строка
-          со словом ERROR. Если базы ещё нет, собери её командой{" "}
-          <code>npm run db:reset</code>.
+          Если не помогает: проверь, что запущен Docker Desktop, и выполни{" "}
+          <code>docker compose up -d</code>. Посмотри окно, где запущено
+          приложение, — там строка со словом ERROR. Если базы ещё нет, собери её
+          командой <code>npm run db:reset</code>.
         </p>
         {error.digest && (
           <p className="text-xs text-muted-foreground">

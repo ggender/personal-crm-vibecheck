@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import type { Db } from "@/db/client";
 import { contacts, notes } from "@/db/schema";
-import { createTestDb } from "@/db/test-db";
+import { createTestDb, type TestDb } from "@/db/test-db";
 import {
   countContacts,
   createContact,
@@ -15,22 +14,23 @@ import {
 } from "./contacts-repo";
 import { addNote, listNotes } from "./notes-repo";
 
-let db: Db;
+let db: TestDb;
 
-beforeEach(() => {
-  db = createTestDb();
+beforeEach(async () => {
+  db = await createTestDb();
 });
 
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers();
+  await db.$client.close();
 });
 
-function nameSearchOf(id: number): string | undefined {
-  return db
+async function nameSearchOf(id: number): Promise<string | undefined> {
+  const [row] = await db
     .select({ nameSearch: contacts.nameSearch })
     .from(contacts)
-    .where(eq(contacts.id, id))
-    .get()?.nameSearch;
+    .where(eq(contacts.id, id));
+  return row?.nameSearch;
 }
 
 async function names(query: string): Promise<string[]> {
@@ -43,7 +43,7 @@ describe("createContact", () => {
 
     const contact = await getContact(id, db);
     expect(contact?.name).toBe("Семён Королёв");
-    expect(nameSearchOf(id)).toBe("семен королев");
+    expect(await nameSearchOf(id)).toBe("семен королев");
   });
 
   it("fills optional fields with empty strings and sets both dates", async () => {
@@ -104,9 +104,12 @@ describe("createContact", () => {
   });
 
   it("does not keep the contact when the first note fails", async () => {
-    db.$client.exec(
-      "CREATE TRIGGER fail_notes BEFORE INSERT ON notes BEGIN SELECT RAISE(ABORT, 'boom'); END;",
-    );
+    await db.$client.exec(`
+      CREATE FUNCTION fail_notes() RETURNS trigger LANGUAGE plpgsql
+        AS $$ BEGIN RAISE EXCEPTION 'boom'; END $$;
+      CREATE TRIGGER fail_notes BEFORE INSERT ON notes
+        FOR EACH ROW EXECUTE FUNCTION fail_notes();
+    `);
 
     await expect(
       createContact({ name: "Анна", firstNote: "Заметка" }, db),
@@ -327,7 +330,7 @@ describe("deleteContact", () => {
     expect(await deleteContact(id, db)).toBe(true);
 
     expect(await getContact(id, db)).toBeNull();
-    const left = db.select({ contactId: notes.contactId }).from(notes).all();
+    const left = await db.select({ contactId: notes.contactId }).from(notes);
     expect(left).toEqual([{ contactId: otherId }]);
   });
 

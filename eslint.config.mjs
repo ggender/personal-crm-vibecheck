@@ -7,7 +7,11 @@ import prettier from "eslint-config-prettier/flat";
 const databaseImports = {
   paths: [
     {
-      name: "better-sqlite3",
+      name: "pg",
+      message: "Only src/db/ and features/*/data/ may use the database.",
+    },
+    {
+      name: "@electric-sql/pglite",
       message: "Only src/db/ and features/*/data/ may use the database.",
     },
   ],

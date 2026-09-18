@@ -1,21 +1,23 @@
-CREATE TABLE `contacts` (
-	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-	`name` text NOT NULL,
-	`name_search` text NOT NULL,
-	`met_context` text DEFAULT '' NOT NULL,
-	`phone` text DEFAULT '' NOT NULL,
-	`email` text DEFAULT '' NOT NULL,
-	`created_at` integer NOT NULL,
-	`updated_at` integer NOT NULL
+CREATE TABLE "contacts" (
+	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "contacts_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"name" text NOT NULL,
+	"name_search" text NOT NULL,
+	"met_context" text DEFAULT '' NOT NULL,
+	"phone" text DEFAULT '' NOT NULL,
+	"email" text DEFAULT '' NOT NULL,
+	"keep_in_touch_days" integer,
+	"talked_at" timestamp with time zone,
+	"created_at" timestamp with time zone NOT NULL,
+	"updated_at" timestamp with time zone NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `contacts_name_search_idx` ON `contacts` (`name_search`);--> statement-breakpoint
-CREATE TABLE `notes` (
-	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-	`contact_id` integer NOT NULL,
-	`body` text NOT NULL,
-	`created_at` integer NOT NULL,
-	FOREIGN KEY (`contact_id`) REFERENCES `contacts`(`id`) ON UPDATE no action ON DELETE cascade
+CREATE TABLE "notes" (
+	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "notes_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"contact_id" integer NOT NULL,
+	"body" text NOT NULL,
+	"created_at" timestamp with time zone NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `notes_contact_id_created_at_idx` ON `notes` (`contact_id`,`created_at`);
+ALTER TABLE "notes" ADD CONSTRAINT "notes_contact_id_contacts_id_fk" FOREIGN KEY ("contact_id") REFERENCES "public"."contacts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "contacts_name_search_idx" ON "contacts" USING btree ("name_search");--> statement-breakpoint
+CREATE INDEX "notes_contact_id_created_at_idx" ON "notes" USING btree ("contact_id","created_at");

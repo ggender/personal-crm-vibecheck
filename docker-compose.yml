@@ -1,0 +1,22 @@
+# Local Postgres for the app: docker compose up -d
+# Reachable only from this computer, on port 5433 (5432 may be taken by
+# another Postgres). No password: nothing outside localhost can connect.
+services:
+  db:
+    image: postgres:17
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      # Code point order, as in the unit tests: the list sorts the same everywhere.
+      POSTGRES_INITDB_ARGS: --locale-provider=builtin --locale=C.UTF-8
+    volumes:
+      - crm-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  crm-postgres:

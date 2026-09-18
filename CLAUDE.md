@@ -36,12 +36,13 @@
 
 ## Команды
 
+- `docker compose up -d` — база Postgres 17 в Docker (нужен запущенный Docker Desktop)
 - `npm run dev` — приложение на http://localhost:3000
 - `npm test` · `npm run lint` · `npm run format:check` · `npm run build`
-- `npm run test:e2e` — сценарии в браузере (Playwright, `e2e/`): сам собирает приложение и поднимает его на :3100 со своей базой `data/e2e/crm.db`; `data/crm.db` не трогает
+- `npm run test:e2e` — сценарии в браузере (Playwright, `e2e/`): сам поднимает базу, собирает приложение и запускает его на :3100 со своей базой `crm_e2e`; базу `crm` не трогает
 - `npm run db:generate` — новая миграция после правки `src/db/schema.ts`
 - `npm run db:migrate` · `npm run db:seed` · `npm run db:reset` (удалить базу и собрать заново)
-- Файл базы: `data/crm.db` (другой путь — переменная `CRM_DB_PATH`)
+- База: Postgres `postgres://postgres@localhost:5433/crm` (другая — переменная `CRM_DATABASE_URL`). Юнит-тесты — на PGlite в памяти, Docker им не нужен
 - Слои проверяет линтер: импорт базы вне `src/db/` и `features/*/data/` — ошибка.
 
 ## Next.js

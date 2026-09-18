@@ -9,12 +9,13 @@ export type Note = {
   createdAt: Date;
 };
 
+// Postgres error code foreign_key_violation.
+const FOREIGN_KEY_VIOLATION = "23503";
+
 function isForeignKeyError(error: unknown): boolean {
   let current: unknown = error;
   while (current instanceof Error) {
-    if (
-      (current as { code?: unknown }).code === "SQLITE_CONSTRAINT_FOREIGNKEY"
-    ) {
+    if ((current as { code?: unknown }).code === FOREIGN_KEY_VIOLATION) {
       return true;
     }
     current = current.cause;
@@ -30,8 +31,7 @@ export async function listNotes(
     .select()
     .from(notes)
     .where(eq(notes.contactId, contactId))
-    .orderBy(desc(notes.createdAt), desc(notes.id))
-    .all();
+    .orderBy(desc(notes.createdAt), desc(notes.id));
 }
 
 // Returns null when the contact is gone (e.g. deleted in another tab).
@@ -41,11 +41,11 @@ export async function addNote(
   db: Db = getDb(),
 ): Promise<Note | null> {
   try {
-    return db
+    const [note] = await db
       .insert(notes)
       .values({ contactId, body: body.trim(), createdAt: new Date() })
-      .returning()
-      .get();
+      .returning();
+    return note;
   } catch (error) {
     if (isForeignKeyError(error)) {
       return null;
@@ -58,19 +58,20 @@ export async function deleteNote(
   id: number,
   db: Db = getDb(),
 ): Promise<boolean> {
-  const result = db.delete(notes).where(eq(notes.id, id)).run();
-  return result.changes > 0;
+  const deleted = await db
+    .delete(notes)
+    .where(eq(notes.id, id))
+    .returning({ id: notes.id });
+  return deleted.length > 0;
 }
 
 export async function countNotes(
   contactId: number,
   db: Db = getDb(),
 ): Promise<number> {
-  return (
-    db
-      .select({ value: count() })
-      .from(notes)
-      .where(eq(notes.contactId, contactId))
-      .get()?.value ?? 0
-  );
+  const [row] = await db
+    .select({ value: count() })
+    .from(notes)
+    .where(eq(notes.contactId, contactId));
+  return row?.value ?? 0;
 }

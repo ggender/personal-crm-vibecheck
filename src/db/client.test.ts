@@ -1,35 +1,23 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { openDatabase } from "./client";
-
-let dir: string;
-
-beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "crm-client-"));
-});
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { databaseUrl } from "./client";
 
 afterEach(() => {
-  fs.rmSync(dir, { recursive: true, force: true });
+  vi.unstubAllEnvs();
 });
 
-describe("openDatabase", () => {
-  it("creates the folder and turns on WAL and foreign keys", () => {
-    const filePath = path.join(dir, "nested", "crm.db");
+describe("databaseUrl", () => {
+  it("points to the Postgres from docker-compose.yml by default", () => {
+    vi.stubEnv("CRM_DATABASE_URL", undefined);
 
-    const db = openDatabase(filePath, { fileMustExist: false });
-
-    expect(fs.existsSync(filePath)).toBe(true);
-    expect(db.$client.pragma("journal_mode", { simple: true })).toBe("wal");
-    expect(db.$client.pragma("foreign_keys", { simple: true })).toBe(1);
-    db.$client.close();
+    expect(databaseUrl()).toBe("postgres://postgres@localhost:5433/crm");
   });
 
-  it("refuses to create a missing file when it must exist", () => {
-    const filePath = path.join(dir, "missing.db");
+  it("takes another database from CRM_DATABASE_URL", () => {
+    vi.stubEnv(
+      "CRM_DATABASE_URL",
+      "postgres://postgres@localhost:5433/crm_e2e",
+    );
 
-    expect(() => openDatabase(filePath, { fileMustExist: true })).toThrow();
-    expect(fs.existsSync(filePath)).toBe(false);
+    expect(databaseUrl()).toBe("postgres://postgres@localhost:5433/crm_e2e");
   });
 });

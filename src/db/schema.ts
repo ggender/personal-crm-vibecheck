@@ -1,9 +1,9 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
-export const contacts = sqliteTable(
+export const contacts = pgTable(
   "contacts",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     name: text("name").notNull(),
     // Always normalizeName(name); set by the contacts repository.
     nameSearch: text("name_search").notNull(),
@@ -13,22 +13,31 @@ export const contacts = sqliteTable(
     // How often to keep in touch, in days; null means "не следить".
     keepInTouchDays: integer("keep_in_touch_days"),
     // Last press of «Пообщались».
-    talkedAt: integer("talked_at", { mode: "timestamp_ms" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+    talkedAt: timestamp("talked_at", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    updatedAt: timestamp("updated_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
   },
   (table) => [index("contacts_name_search_idx").on(table.nameSearch)],
 );
 
-export const notes = sqliteTable(
+export const notes = pgTable(
   "notes",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     contactId: integer("contact_id")
       .notNull()
       .references(() => contacts.id, { onDelete: "cascade" }),
     body: text("body").notNull(),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: timestamp("created_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
   },
   (table) => [
     index("notes_contact_id_created_at_idx").on(

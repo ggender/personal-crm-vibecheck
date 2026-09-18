@@ -50,7 +50,9 @@ async function loadScreen(screen: ScreenState, now: Date) {
     return { contacts, total, dueCount: allDue.length, card };
   } catch (error) {
     log.error("db", "page.load_failed", error);
-    throw error;
+    // Next.js prints what is thrown, and Drizzle's error carries the query
+    // params (the search text): the error screen gets one without them.
+    throw new Error("The screen could not be loaded");
   }
 }
 

@@ -1,55 +1,35 @@
-import fs from "node:fs";
-import path from "node:path";
-import Database from "better-sqlite3";
-import {
-  drizzle,
-  type BetterSQLite3Database,
-} from "drizzle-orm/better-sqlite3";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import { Pool } from "pg";
 import { log } from "@/lib/log";
 import * as schema from "./schema";
 
-export type Db = BetterSQLite3Database<typeof schema> & {
-  $client: Database.Database;
-};
+// Repositories work with any Postgres driver: pg in the app, PGlite in tests.
+export type Db = PgDatabase<PgQueryResultHKT, typeof schema>;
+export type ServerDb = NodePgDatabase<typeof schema> & { $client: Pool };
 
-export function databasePath(): string {
-  return path.resolve(process.env.CRM_DB_PATH ?? "data/crm.db");
+export function databaseUrl(): string {
+  return (
+    process.env.CRM_DATABASE_URL ?? "postgres://postgres@localhost:5433/crm"
+  );
 }
 
-type OpenOptions = {
-  // The app never creates the file: a missing database must be an error,
-  // not a silently empty one. Scripts create it.
-  fileMustExist: boolean;
-};
-
-export function openDatabase(filePath: string, options: OpenOptions): Db {
-  const inMemory = filePath === ":memory:";
-  if (!inMemory && !options.fileMustExist) {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  }
-  const sqlite = new Database(filePath, {
-    fileMustExist: !inMemory && options.fileMustExist,
-  });
-  sqlite.pragma("journal_mode = WAL");
-  // SQLite ignores ON DELETE CASCADE unless this is on for the connection.
-  sqlite.pragma("foreign_keys = ON");
-  return drizzle({ client: sqlite, schema });
+// Connects lazily, on the first query. Scripts close it with db.$client.end().
+export function openDatabase(url: string): ServerDb {
+  const pool = new Pool({ connectionString: url });
+  // An idle connection breaks when Postgres restarts or the database is
+  // reset; without a listener that error would stop the whole process.
+  pool.on("error", (error) => log.error("db", "db.pool_error", error));
+  return drizzle({ client: pool, schema });
 }
 
-// Next.js reloads modules in development; keep one connection per process.
-const globalForDb = globalThis as typeof globalThis & { crmDb?: Db };
+// Next.js reloads modules in development; keep one pool per process.
+const globalForDb = globalThis as typeof globalThis & { crmDb?: ServerDb };
 
-export function getDb(): Db {
+export function getDb(): ServerDb {
   if (!globalForDb.crmDb) {
-    try {
-      globalForDb.crmDb = openDatabase(databasePath(), {
-        fileMustExist: true,
-      });
-    } catch (error) {
-      log.error("db", "db.open_failed", error);
-      throw error;
-    }
-    log.info("db", "db.opened");
+    globalForDb.crmDb = openDatabase(databaseUrl());
+    log.info("db", "db.pool_created");
   }
   return globalForDb.crmDb;
 }

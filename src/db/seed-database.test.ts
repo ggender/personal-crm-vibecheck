@@ -6,28 +6,27 @@ import {
 } from "@/features/contacts/keep-in-touch";
 import { normalizeName } from "@/features/contacts/normalize-name";
 import { KEEP_IN_TOUCH_DAYS } from "@/features/contacts/validation";
-import type { Db } from "./client";
 import { contacts, notes } from "./schema";
 import { SEED_CONTACT_COUNT, seedDatabase } from "./seed-database";
-import { createTestDb } from "./test-db";
+import { createTestDb, type TestDb } from "./test-db";
 
 const now = new Date("2026-09-17T12:00:00Z");
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function allRows(db: Db) {
+async function allRows(db: TestDb) {
   return {
-    contacts: db.select().from(contacts).orderBy(contacts.id).all(),
-    notes: db.select().from(notes).orderBy(notes.id).all(),
+    contacts: await db.select().from(contacts).orderBy(contacts.id),
+    notes: await db.select().from(notes).orderBy(notes.id),
   };
 }
 
 describe("seedDatabase", () => {
   it("fills an empty database with exactly 999 contacts", async () => {
-    const db = createTestDb();
+    const db = await createTestDb();
 
     const result = await seedDatabase(db, now);
 
-    const rows = allRows(db);
+    const rows = await allRows(db);
     expect(SEED_CONTACT_COUNT).toBe(999);
     expect(rows.contacts).toHaveLength(999);
     expect(result).toEqual({
@@ -38,18 +37,18 @@ describe("seedDatabase", () => {
   });
 
   it("adds nothing on a second run", async () => {
-    const db = createTestDb();
+    const db = await createTestDb();
     await seedDatabase(db, now);
-    const before = allRows(db);
+    const before = await allRows(db);
 
     const result = await seedDatabase(db, now);
 
     expect(result).toEqual({ status: "skipped", contacts: 999 });
-    expect(allRows(db)).toEqual(before);
+    expect(await allRows(db)).toEqual(before);
   });
 
   it("leaves a database with any contacts alone", async () => {
-    const db = createTestDb();
+    const db = await createTestDb();
     await createContact({ name: "Моя Анна" }, db);
 
     const result = await seedDatabase(db, now);
@@ -58,23 +57,23 @@ describe("seedDatabase", () => {
   });
 
   it("produces the same data every time", async () => {
-    const first = createTestDb();
-    const second = createTestDb();
+    const first = await createTestDb();
+    const second = await createTestDb();
 
     await seedDatabase(first, now);
     await seedDatabase(second, now);
 
-    expect(allRows(second)).toEqual(allRows(first));
+    expect(await allRows(second)).toEqual(await allRows(first));
   });
 });
 
 describe("seed content", () => {
-  let rows: ReturnType<typeof allRows>;
+  let rows: Awaited<ReturnType<typeof allRows>>;
 
   beforeAll(async () => {
-    const db = createTestDb();
+    const db = await createTestDb();
     await seedDatabase(db, now);
-    rows = allRows(db);
+    rows = await allRows(db);
   });
 
   it("stores the search form of every name", () => {

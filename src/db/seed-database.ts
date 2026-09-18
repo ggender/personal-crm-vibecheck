@@ -161,17 +161,16 @@ export async function seedDatabase(
 
   let noteCount = 0;
   const people = generateSeedContacts(now);
-  db.transaction((tx) => {
+  await db.transaction(async (tx) => {
     for (const person of people) {
-      const { id } = tx
+      const [{ id }] = await tx
         .insert(contacts)
         .values(buildContactRow(person, person.createdAt))
-        .returning({ id: contacts.id })
-        .get();
+        .returning({ id: contacts.id });
       if (person.notes.length > 0) {
-        tx.insert(notes)
-          .values(person.notes.map((note) => ({ contactId: id, ...note })))
-          .run();
+        await tx
+          .insert(notes)
+          .values(person.notes.map((note) => ({ contactId: id, ...note })));
         noteCount += person.notes.length;
       }
     }

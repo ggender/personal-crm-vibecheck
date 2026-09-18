@@ -1,6 +1,6 @@
-// The only home for name normalization. SQLite cannot compare Cyrillic
-// case-insensitively, so contacts.name_search stores this form and search
-// queries are normalized the same way.
+// The only home for name normalization. contacts.name_search stores this
+// form (lower case, ё as е, single spaces) and search queries are normalized
+// the same way, so search and sorting never depend on database settings.
 
 export function normalizeName(value: string): string {
   return value

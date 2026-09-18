@@ -1,19 +1,11 @@
 // npm run db:seed — fills an empty database with 999 fictional contacts.
 import { log } from "@/lib/log";
-import { databasePath, openDatabase, type Db } from "./client";
+import { hintFor } from "./admin";
+import { databaseUrl, openDatabase } from "./client";
 import { seedDatabase } from "./seed-database";
 
 async function main(): Promise<void> {
-  let db: Db;
-  try {
-    db = openDatabase(databasePath(), { fileMustExist: true });
-  } catch (error) {
-    log.error("seed", "seed.open_failed", error);
-    console.error("Базы ещё нет. Сначала выполни: npm run db:migrate");
-    process.exitCode = 1;
-    return;
-  }
-
+  const db = openDatabase(databaseUrl());
   try {
     const result = await seedDatabase(db);
     if (result.status === "skipped") {
@@ -31,11 +23,12 @@ async function main(): Promise<void> {
   } catch (error) {
     log.error("seed", "seed.failed", error);
     console.error(
-      "Не удалось наполнить базу. Если таблиц ещё нет — выполни: npm run db:migrate",
+      hintFor(error) ??
+        "Не удалось наполнить базу. Подробности — в строке ERROR выше.",
     );
     process.exitCode = 1;
   } finally {
-    db.$client.close();
+    await db.$client.end();
   }
 }
 

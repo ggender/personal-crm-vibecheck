@@ -1,15 +1,23 @@
-// First step of npm run db:reset: deletes the database file.
-// The npm script then runs db:migrate and db:seed.
-import fs from "node:fs";
+// First step of npm run db:reset: drops the database.
+// The npm script then runs db:migrate (creates it again) and db:seed.
 import { log } from "@/lib/log";
-import { databasePath } from "./client";
+import { databaseName, dropDatabase, hintFor } from "./admin";
+import { databaseUrl } from "./client";
 
-const filePath = databasePath();
-for (const suffix of ["", "-wal", "-shm"]) {
-  fs.rmSync(`${filePath}${suffix}`, { force: true });
+async function main(): Promise<void> {
+  const url = databaseUrl();
+  try {
+    await dropDatabase(url);
+    log.info("seed", "db.reset");
+    console.log(`Старая база удалена: ${databaseName(url)}`);
+  } catch (error) {
+    log.error("seed", "db.reset_failed", error);
+    console.error(
+      hintFor(error) ??
+        "Не удалось удалить базу. Подробности — в строке ERROR выше.",
+    );
+    process.exitCode = 1;
+  }
 }
-log.info("seed", "db.reset");
-console.log(`Старая база удалена: ${filePath}`);
-console.log(
-  "Если приложение запущено, перезапусти его, когда база соберётся (Ctrl+C, затем npm run dev).",
-);
+
+void main();
