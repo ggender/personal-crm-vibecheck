@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("./data/notes-repo", () => ({
@@ -110,6 +110,16 @@ describe("createContact action", () => {
     });
     expect(contactsRepo.createContact).not.toHaveBeenCalled();
   });
+
+  it("turns an unexpected failure into a retryable message", async () => {
+    vi.mocked(contactsRepo.createContact).mockRejectedValue(new Error("busy"));
+
+    expect(await createContact({ name: "Марк" })).toEqual({
+      ok: false,
+      error: "Не удалось сохранить контакт",
+      canRetry: true,
+    });
+  });
 });
 
 describe("updateContact action", () => {
@@ -200,5 +210,95 @@ describe("deleteContact action", () => {
   it("refuses a broken id without touching the database", async () => {
     expect(await deleteContact({ contactId: 0 })).toMatchObject({ ok: false });
     expect(contactsRepo.deleteContact).not.toHaveBeenCalled();
+  });
+
+  it("turns an unexpected failure into a retryable message", async () => {
+    vi.mocked(contactsRepo.deleteContact).mockRejectedValue(
+      new Error("locked"),
+    );
+
+    expect(await deleteContact({ contactId: 9 })).toEqual({
+      ok: false,
+      error: "Не удалось удалить контакт",
+      canRetry: true,
+    });
+  });
+});
+
+describe("action logs", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it("carry ids and lengths, never names, contact details or note texts", async () => {
+    vi.stubEnv("LOG_LEVEL", "debug");
+    const lines: string[] = [];
+    for (const method of ["log", "warn", "error"] as const) {
+      vi.spyOn(console, method).mockImplementation((line: unknown) => {
+        lines.push(String(line));
+      });
+    }
+    const contact = {
+      name: "Анна Петрова",
+      metContext: "Соседка по даче",
+      phone: "+7 900 555-12-34",
+      email: "anna@example.com",
+    };
+    const note = "Обещала вернуть дрель";
+    // Like Drizzle's errors: the query params are in the message.
+    const queryError = new Error(
+      `Failed query: insert into "contacts" params: ${Object.values(contact).join(",")},${note}`,
+      { cause: new Error("database is locked") },
+    );
+
+    vi.mocked(contactsRepo.createContact)
+      .mockResolvedValueOnce(1000)
+      .mockRejectedValueOnce(queryError);
+    await createContact({ ...contact, firstNote: note });
+    await createContact({ ...contact, firstNote: note });
+    await createContact({ ...contact, email: "anna-example.com" });
+
+    vi.mocked(contactsRepo.updateContact)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockRejectedValueOnce(queryError);
+    await updateContact({ id: 7, ...contact });
+    await updateContact({ id: 7, ...contact });
+    await updateContact({ id: 7, ...contact });
+
+    vi.mocked(notesRepo.addNote)
+      .mockResolvedValueOnce({
+        id: 5,
+        contactId: 7,
+        body: note,
+        createdAt: new Date(),
+      })
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(queryError);
+    await addNote({ contactId: 7, body: note });
+    await addNote({ contactId: 7, body: note });
+    await addNote({ contactId: 7, body: note });
+    await addNote({ contactId: 7, body: note.repeat(300) });
+
+    const output = lines.join("\n");
+    // Every path above was logged, so the check below is not empty.
+    for (const event of [
+      "contact.created",
+      "contact.create_failed",
+      "contact.rejected",
+      "contact.updated",
+      "contact.missing",
+      "contact.update_failed",
+      "note.added",
+      "note.contact_missing",
+      "note.add_failed",
+      "note.rejected",
+    ]) {
+      expect(output).toContain(event);
+    }
+    for (const personal of [...Object.values(contact), note]) {
+      expect(output).not.toContain(personal);
+    }
   });
 });
