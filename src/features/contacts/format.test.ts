@@ -1,14 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+  calendarDaysBetween,
   deleteContactQuestion,
   deleteNoteQuestion,
   formatContactCount,
+  formatDayCount,
   formatFoundCount,
+  formatKeepInTouch,
+  formatKeepInTouchStatus,
   formatNoteCount,
   formatNoteDate,
   formatTodayLabel,
   initials,
 } from "./format";
+import { KEEP_IN_TOUCH_DAYS } from "./validation";
 
 describe("formatContactCount", () => {
   it.each([
@@ -136,5 +141,98 @@ describe("deleteNoteQuestion", () => {
     expect(deleteNoteQuestion(new Date(2025, 4, 17, 9, 0), now)).toBe(
       "Удалить заметку от 17 мая 2025?",
     );
+  });
+});
+
+describe("calendarDaysBetween", () => {
+  it("counts calendar days in local time, not 24-hour periods", () => {
+    const now = new Date(2026, 8, 18, 0, 10);
+    expect(calendarDaysBetween(new Date(2026, 8, 18, 0, 5), now)).toBe(0);
+    expect(calendarDaysBetween(new Date(2026, 8, 17, 23, 50), now)).toBe(1);
+    expect(calendarDaysBetween(new Date(2026, 7, 19, 12, 0), now)).toBe(30);
+  });
+
+  it("handles the turn of the year and a date in the future", () => {
+    expect(
+      calendarDaysBetween(
+        new Date(2026, 11, 31, 22, 0),
+        new Date(2027, 0, 1, 9, 0),
+      ),
+    ).toBe(1);
+    expect(
+      calendarDaysBetween(
+        new Date(2026, 8, 20, 9, 0),
+        new Date(2026, 8, 18, 9, 0),
+      ),
+    ).toBe(-2);
+  });
+});
+
+describe("formatDayCount", () => {
+  it.each([
+    [0, "0 дней"],
+    [1, "1 день"],
+    [2, "2 дня"],
+    [5, "5 дней"],
+    [11, "11 дней"],
+    [21, "21 день"],
+    [45, "45 дней"],
+  ])("%i → %s", (count, text) => {
+    expect(formatDayCount(count)).toBe(text);
+  });
+});
+
+describe("formatKeepInTouch", () => {
+  it.each([
+    [null, "Не следить"],
+    [14, "Раз в 2 недели"],
+    [30, "Раз в месяц"],
+    [90, "Раз в 3 месяца"],
+    [180, "Раз в полгода"],
+    [365, "Раз в год"],
+  ])("%s → %s", (days, text) => {
+    expect(formatKeepInTouch(days)).toBe(text);
+  });
+
+  it("has a name for every rhythm in the form", () => {
+    for (const days of KEEP_IN_TOUCH_DAYS) {
+      expect(formatKeepInTouch(days)).not.toMatch(/\d+ д/);
+    }
+  });
+
+  it("still reads well for a rhythm outside the list", () => {
+    expect(formatKeepInTouch(45)).toBe("Раз в 45 дней");
+  });
+});
+
+describe("formatKeepInTouchStatus", () => {
+  it("says it is time to write and how long it has been", () => {
+    expect(
+      formatKeepInTouchStatus({
+        days: 30,
+        daysSince: 45,
+        daysLeft: 0,
+        isDue: true,
+      }),
+    ).toBe("Раз в месяц · пора написать: 45 дней без общения");
+  });
+
+  it("says when the next time comes", () => {
+    expect(
+      formatKeepInTouchStatus({
+        days: 30,
+        daysSince: 12,
+        daysLeft: 18,
+        isDue: false,
+      }),
+    ).toBe("Раз в месяц · следующий раз через 18 дней");
+    expect(
+      formatKeepInTouchStatus({
+        days: 14,
+        daysSince: 13,
+        daysLeft: 1,
+        isDue: false,
+      }),
+    ).toBe("Раз в 2 недели · следующий раз через 1 день");
   });
 });

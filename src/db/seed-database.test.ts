@@ -1,6 +1,11 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createContact } from "@/features/contacts/data/contacts-repo";
+import {
+  keepInTouchState,
+  lastTalkAt,
+} from "@/features/contacts/keep-in-touch";
 import { normalizeName } from "@/features/contacts/normalize-name";
+import { KEEP_IN_TOUCH_DAYS } from "@/features/contacts/validation";
 import type { Db } from "./client";
 import { contacts, notes } from "./schema";
 import { SEED_CONTACT_COUNT, seedDatabase } from "./seed-database";
@@ -154,6 +159,54 @@ describe("seed content", () => {
         createdAtById.get(note.contactId)!.getTime(),
       );
     }
+  });
+
+  it("gives a few percent a keep-in-touch rhythm, and some of them are due", () => {
+    const withRhythm = rows.contacts.filter(
+      (contact) => contact.keepInTouchDays !== null,
+    );
+    expect(withRhythm.length / 999).toBeGreaterThan(0.02);
+    expect(withRhythm.length / 999).toBeLessThan(0.07);
+    for (const contact of withRhythm) {
+      expect(KEEP_IN_TOUCH_DAYS).toContain(contact.keepInTouchDays);
+    }
+    expect(rows.contacts.every((contact) => contact.talkedAt === null)).toBe(
+      true,
+    );
+
+    const lastNoteAt = new Map<number, Date>();
+    for (const note of rows.notes) {
+      const latest = lastNoteAt.get(note.contactId);
+      if (!latest || note.createdAt > latest) {
+        lastNoteAt.set(note.contactId, note.createdAt);
+      }
+    }
+    const due = withRhythm.filter(
+      (contact) =>
+        keepInTouchState(
+          contact.keepInTouchDays!,
+          lastTalkAt({
+            createdAt: contact.createdAt,
+            talkedAt: contact.talkedAt,
+            lastNoteAt: lastNoteAt.get(contact.id) ?? null,
+          }),
+          now,
+        ).isDue,
+    );
+    expect(due.length).toBeGreaterThanOrEqual(5);
+    expect(due.length).toBeLessThan(withRhythm.length);
+  });
+
+  it("gives the people from the sketches their rhythms", () => {
+    const rhythmOf = (person: string) =>
+      rows.contacts.find(
+        (contact) => `${contact.name} · ${contact.metContext}` === person,
+      )?.keepInTouchDays;
+
+    expect(rhythmOf("Анна Петрова · Конференция ProductCamp, 2025")).toBe(30);
+    expect(rhythmOf("Дарья Лебедева · Через Бориса")).toBe(14);
+    expect(rhythmOf("Вера Соколова · Соседка по даче")).toBe(90);
+    expect(rhythmOf("Анна Петрова · Соседка по подъезду")).toBeNull();
   });
 
   it("includes the people from the sketches", () => {

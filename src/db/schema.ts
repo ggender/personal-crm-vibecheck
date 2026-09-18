@@ -10,6 +10,10 @@ export const contacts = sqliteTable(
     metContext: text("met_context").notNull().default(""),
     phone: text("phone").notNull().default(""),
     email: text("email").notNull().default(""),
+    // How often to keep in touch, in days; null means "не следить".
+    keepInTouchDays: integer("keep_in_touch_days"),
+    // Last press of «Пообщались».
+    talkedAt: integer("talked_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },

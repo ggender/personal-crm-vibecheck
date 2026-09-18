@@ -1,23 +1,47 @@
 import Link from "next/link";
 import type { ContactListItem } from "../data/contacts-repo";
-import { formatContactCount, formatFoundCount, initials } from "../format";
+import {
+  formatContactCount,
+  formatDayCount,
+  formatFoundCount,
+  initials,
+} from "../format";
 import { screenHref } from "../screen-url";
-import { NoContactsYet, NoSearchResults } from "./empty-states";
+import {
+  NoContactsYet,
+  NoDueSearchResults,
+  NoOneDue,
+  NoSearchResults,
+} from "./empty-states";
 import { ScrollToSelected } from "./scroll-to-selected";
 
 type ContactListProps = {
-  contacts: ContactListItem[];
+  // In the «Пора написать» list every row knows how long it has been.
+  contacts: (ContactListItem & { daysSinceTalk?: number })[];
   total: number;
   query: string;
   isSearching: boolean;
+  isDueList: boolean;
   selectedId: number | null;
 };
+
+function EmptyList({
+  query,
+  isSearching,
+  isDueList,
+}: Pick<ContactListProps, "query" | "isSearching" | "isDueList">) {
+  if (isDueList) {
+    return isSearching ? <NoDueSearchResults query={query} /> : <NoOneDue />;
+  }
+  return isSearching ? <NoSearchResults query={query} /> : <NoContactsYet />;
+}
 
 export function ContactList({
   contacts,
   total,
   query,
   isSearching,
+  isDueList,
   selectedId,
 }: ContactListProps) {
   return (
@@ -31,11 +55,11 @@ export function ContactList({
           : formatContactCount(total)}
       </p>
       {contacts.length === 0 ? (
-        isSearching ? (
-          <NoSearchResults query={query} />
-        ) : (
-          <NoContactsYet />
-        )
+        <EmptyList
+          query={query}
+          isSearching={isSearching}
+          isDueList={isDueList}
+        />
       ) : (
         <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {contacts.map((contact) => {
@@ -43,7 +67,11 @@ export function ContactList({
             return (
               <li key={contact.id} className="border-b last:border-b-0">
                 <Link
-                  href={screenHref({ q: query, contactId: contact.id })}
+                  href={screenHref({
+                    q: query,
+                    isDueList,
+                    contactId: contact.id,
+                  })}
                   scroll={false}
                   prefetch={false}
                   aria-current={isSelected ? "page" : undefined}
@@ -56,7 +84,7 @@ export function ContactList({
                   >
                     {initials(contact.name)}
                   </span>
-                  <span className="min-w-0">
+                  <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">
                       {contact.name}
                     </span>
@@ -66,6 +94,12 @@ export function ContactList({
                       </span>
                     )}
                   </span>
+                  {contact.daysSinceTalk !== undefined && (
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                      {formatDayCount(contact.daysSinceTalk)}
+                      <span className="sr-only"> без общения</span>
+                    </span>
+                  )}
                 </Link>
               </li>
             );

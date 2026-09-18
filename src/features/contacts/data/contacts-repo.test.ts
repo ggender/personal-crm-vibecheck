@@ -8,6 +8,8 @@ import {
   createContact,
   deleteContact,
   getContact,
+  listKeepInTouch,
+  markTalked,
   searchContacts,
   updateContact,
 } from "./contacts-repo";
@@ -56,9 +58,20 @@ describe("createContact", () => {
       metContext: "",
       phone: "",
       email: "",
+      keepInTouchDays: null,
+      talkedAt: null,
       createdAt: new Date("2026-09-17T10:00:00Z"),
       updatedAt: new Date("2026-09-17T10:00:00Z"),
     });
+  });
+
+  it("stores how often to keep in touch", async () => {
+    const id = await createContact(
+      { name: "Анна Петрова", keepInTouchDays: 30 },
+      db,
+    );
+
+    expect(await getContact(id, db)).toMatchObject({ keepInTouchDays: 30 });
   });
 
   it("saves the first note together with the contact", async () => {
@@ -195,6 +208,7 @@ describe("updateContact", () => {
         metContext: "Митап по Next.js",
         phone: "+7 900 555-00-00",
         email: "mark@example.com",
+        keepInTouchDays: 90,
       },
       db,
     );
@@ -206,14 +220,100 @@ describe("updateContact", () => {
       metContext: "Митап по Next.js",
       phone: "+7 900 555-00-00",
       email: "mark@example.com",
+      keepInTouchDays: 90,
+      talkedAt: null,
       createdAt: new Date("2026-09-01T10:00:00Z"),
       updatedAt: new Date("2026-09-17T10:00:00Z"),
     });
     expect(await names("соколов")).toEqual(["Марк Орлов-Соколов"]);
   });
 
+  it("stops keeping in touch when the rhythm is removed", async () => {
+    const id = await createContact({ name: "Марк", keepInTouchDays: 30 }, db);
+
+    await updateContact(id, { name: "Марк", keepInTouchDays: null }, db);
+
+    expect(await getContact(id, db)).toMatchObject({ keepInTouchDays: null });
+  });
+
   it("returns false for a missing contact", async () => {
     expect(await updateContact(12345, { name: "Никто" }, db)).toBe(false);
+  });
+});
+
+describe("markTalked", () => {
+  it("stamps when you talked and leaves the change date alone", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-01T10:00:00Z"));
+    const id = await createContact({ name: "Марк", keepInTouchDays: 14 }, db);
+
+    vi.setSystemTime(new Date("2026-09-17T10:00:00Z"));
+    expect(await markTalked(id, db)).toBe(true);
+
+    expect(await getContact(id, db)).toMatchObject({
+      talkedAt: new Date("2026-09-17T10:00:00Z"),
+      updatedAt: new Date("2026-09-01T10:00:00Z"),
+    });
+  });
+
+  it("returns false for a missing contact", async () => {
+    expect(await markTalked(12345, db)).toBe(false);
+  });
+});
+
+describe("listKeepInTouch", () => {
+  it("returns only contacts with a rhythm, with the times the rules need", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-01T10:00:00Z"));
+    const anna = await createContact(
+      { name: "Анна Петрова", keepInTouchDays: 30, firstNote: "Первая" },
+      db,
+    );
+    const boris = await createContact(
+      { name: "Борис Ковалёв", keepInTouchDays: 14 },
+      db,
+    );
+    await createContact({ name: "Вера Соколова", firstNote: "Без ритма" }, db);
+
+    vi.setSystemTime(new Date("2026-09-10T10:00:00Z"));
+    await addNote(anna, "Последняя", db);
+    vi.setSystemTime(new Date("2026-09-12T10:00:00Z"));
+    await markTalked(boris, db);
+
+    expect(await listKeepInTouch("", db)).toEqual([
+      {
+        id: anna,
+        name: "Анна Петрова",
+        metContext: "",
+        keepInTouchDays: 30,
+        createdAt: new Date("2026-08-01T10:00:00Z"),
+        talkedAt: null,
+        lastNoteAt: new Date("2026-09-10T10:00:00Z"),
+      },
+      {
+        id: boris,
+        name: "Борис Ковалёв",
+        metContext: "",
+        keepInTouchDays: 14,
+        createdAt: new Date("2026-08-01T10:00:00Z"),
+        talkedAt: new Date("2026-09-12T10:00:00Z"),
+        lastNoteAt: null,
+      },
+    ]);
+  });
+
+  it("narrows by name the same way as the search", async () => {
+    for (const name of ["Анна Петрова", "Семён Королёв", "Иван Аннин"]) {
+      await createContact({ name, keepInTouchDays: 30 }, db);
+    }
+    await createContact({ name: "Анна Жукова" }, db);
+
+    const found = async (query: string) =>
+      (await listKeepInTouch(query, db)).map((contact) => contact.name);
+
+    expect(await found("анн")).toEqual(["Анна Петрова", "Иван Аннин"]);
+    expect(await found("семен")).toEqual(["Семён Королёв"]);
+    expect(await found("%")).toEqual([]);
   });
 });
 

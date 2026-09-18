@@ -13,13 +13,20 @@ import {
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { createContact, updateContact } from "../actions";
 import type { Contact } from "../data/contacts-repo";
+import { formatKeepInTouch } from "../format";
 import { screenHref } from "../screen-url";
+import { KEEP_IN_TOUCH_DAYS } from "../validation";
 
 type ContactFormProps = {
   query: string;
+  isDueList: boolean;
   // Editing an existing contact, or a new one with an optional suggested name.
   contact?: Contact;
   suggestedName?: string;
@@ -30,10 +37,19 @@ type Values = {
   metContext: string;
   phone: string;
   email: string;
+  // "" means "не следить"; otherwise a number of days as text.
+  keepInTouchDays: string;
   firstNote: string;
 };
 
-const FIELD_ORDER = ["name", "metContext", "phone", "email", "firstNote"];
+const FIELD_ORDER = [
+  "name",
+  "metContext",
+  "phone",
+  "email",
+  "keepInTouchDays",
+  "firstNote",
+];
 
 function FieldLabel({
   htmlFor,
@@ -54,6 +70,7 @@ function FieldLabel({
 
 export function ContactForm({
   query,
+  isDueList,
   contact,
   suggestedName = "",
 }: ContactFormProps) {
@@ -64,6 +81,7 @@ export function ContactForm({
     metContext: contact?.metContext ?? "",
     phone: contact?.phone ?? "",
     email: contact?.email ?? "",
+    keepInTouchDays: contact?.keepInTouchDays?.toString() ?? "",
     firstNote: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -94,17 +112,24 @@ export function ContactForm({
     savingRef.current = true;
     setErrors({});
     setFormError(null);
+    const input = {
+      ...values,
+      keepInTouchDays:
+        values.keepInTouchDays === "" ? null : Number(values.keepInTouchDays),
+    };
     startTransition(async () => {
       try {
         const result = isEdit
-          ? await updateContact({ id: contact.id, ...values })
-          : await createContact(values);
+          ? await updateContact({ id: contact.id, ...input })
+          : await createContact(input);
         if (result.ok) {
-          // A new contact is shown without the search filter, so it is visible.
+          // A new contact is shown without the search and the «Пора
+          // написать» list, so it is visible.
           startTransition(() =>
             router.push(
               screenHref({
                 q: isEdit ? query : "",
+                isDueList: isEdit && isDueList,
                 contactId: result.contactId,
               }),
             ),
@@ -128,8 +153,11 @@ export function ContactForm({
     value: values[field],
     "aria-invalid": field in errors,
     "aria-describedby": field in errors ? `error-${field}` : undefined,
-    onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      set(field)(event.target.value),
+    onChange: (
+      event: ChangeEvent<
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+      >,
+    ) => set(field)(event.target.value),
   });
 
   const fieldError = (field: keyof Values) =>
@@ -205,6 +233,26 @@ export function ContactForm({
         </div>
       </div>
 
+      <div className="space-y-1.5">
+        <FieldLabel htmlFor="contact-keepInTouchDays">
+          Как часто общаться
+        </FieldLabel>
+        <NativeSelect
+          {...fieldProps("keepInTouchDays")}
+          className="w-full *:data-[slot=native-select]:h-9 sm:w-64"
+        >
+          <NativeSelectOption value="">
+            {formatKeepInTouch(null)}
+          </NativeSelectOption>
+          {KEEP_IN_TOUCH_DAYS.map((days) => (
+            <NativeSelectOption key={days} value={days}>
+              {formatKeepInTouch(days)}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+        {fieldError("keepInTouchDays")}
+      </div>
+
       {!isEdit && (
         <div className="space-y-1.5">
           <FieldLabel htmlFor="contact-firstNote">
@@ -226,6 +274,7 @@ export function ContactForm({
         <Link
           href={screenHref({
             q: query,
+            isDueList,
             contactId: isEdit ? contact.id : undefined,
           })}
           scroll={false}

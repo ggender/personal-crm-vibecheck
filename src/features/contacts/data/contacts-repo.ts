@@ -1,4 +1,4 @@
-import { and, asc, count, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, isNotNull, max, sql } from "drizzle-orm";
 import { getDb, type Db } from "@/db/client";
 import { contacts, notes } from "@/db/schema";
 import {
@@ -13,17 +13,28 @@ export type Contact = {
   metContext: string;
   phone: string;
   email: string;
+  keepInTouchDays: number | null;
+  talkedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
 
 export type ContactListItem = Pick<Contact, "id" | "name" | "metContext">;
 
+// A contact with a rhythm and the times keep-in-touch.ts counts from.
+export type KeepInTouchItem = ContactListItem & {
+  keepInTouchDays: number;
+  createdAt: Date;
+  talkedAt: Date | null;
+  lastNoteAt: Date | null;
+};
+
 export type ContactFields = {
   name: string;
   metContext?: string;
   phone?: string;
   email?: string;
+  keepInTouchDays?: number | null;
 };
 
 export type NewContact = ContactFields & { firstNote?: string };
@@ -38,6 +49,7 @@ export function buildContactRow(fields: ContactFields, now: Date) {
     metContext: fields.metContext ?? "",
     phone: fields.phone ?? "",
     email: fields.email ?? "",
+    keepInTouchDays: fields.keepInTouchDays ?? null,
     createdAt: now,
     updatedAt: now,
   };
@@ -49,18 +61,24 @@ const contactColumns = {
   metContext: contacts.metContext,
   phone: contacts.phone,
   email: contacts.email,
+  keepInTouchDays: contacts.keepInTouchDays,
+  talkedAt: contacts.talkedAt,
   createdAt: contacts.createdAt,
   updatedAt: contacts.updatedAt,
 };
+
+// Every word of the query must be part of the name.
+function nameMatches(query: string) {
+  return splitSearchQuery(query).map(
+    (word) =>
+      sql`${contacts.nameSearch} LIKE ${`%${escapeLike(word)}%`} ESCAPE '\\'`,
+  );
+}
 
 export async function searchContacts(
   query: string,
   db: Db = getDb(),
 ): Promise<ContactListItem[]> {
-  const conditions = splitSearchQuery(query).map(
-    (word) =>
-      sql`${contacts.nameSearch} LIKE ${`%${escapeLike(word)}%`} ESCAPE '\\'`,
-  );
   return db
     .select({
       id: contacts.id,
@@ -68,9 +86,36 @@ export async function searchContacts(
       metContext: contacts.metContext,
     })
     .from(contacts)
-    .where(and(...conditions))
+    .where(and(...nameMatches(query)))
     .orderBy(asc(contacts.nameSearch), asc(contacts.id))
     .all();
+}
+
+// Contacts with a rhythm, alphabetically; which of them are due is decided
+// by keep-in-touch.ts.
+export async function listKeepInTouch(
+  query: string,
+  db: Db = getDb(),
+): Promise<KeepInTouchItem[]> {
+  const rows = db
+    .select({
+      id: contacts.id,
+      name: contacts.name,
+      metContext: contacts.metContext,
+      keepInTouchDays: contacts.keepInTouchDays,
+      createdAt: contacts.createdAt,
+      talkedAt: contacts.talkedAt,
+      lastNoteAt: max(notes.createdAt),
+    })
+    .from(contacts)
+    .leftJoin(notes, eq(notes.contactId, contacts.id))
+    .where(and(isNotNull(contacts.keepInTouchDays), ...nameMatches(query)))
+    .groupBy(contacts.id)
+    .orderBy(asc(contacts.nameSearch), asc(contacts.id))
+    .all();
+  return rows.flatMap(({ keepInTouchDays, ...row }) =>
+    keepInTouchDays === null ? [] : [{ ...row, keepInTouchDays }],
+  );
 }
 
 export async function countContacts(db: Db = getDb()): Promise<number> {
@@ -113,11 +158,40 @@ export async function updateContact(
   fields: ContactFields,
   db: Db = getDb(),
 ): Promise<boolean> {
-  const { name, nameSearch, metContext, phone, email, updatedAt } =
-    buildContactRow(fields, new Date());
+  const {
+    name,
+    nameSearch,
+    metContext,
+    phone,
+    email,
+    keepInTouchDays,
+    updatedAt,
+  } = buildContactRow(fields, new Date());
   const result = db
     .update(contacts)
-    .set({ name, nameSearch, metContext, phone, email, updatedAt })
+    .set({
+      name,
+      nameSearch,
+      metContext,
+      phone,
+      email,
+      keepInTouchDays,
+      updatedAt,
+    })
+    .where(eq(contacts.id, id))
+    .run();
+  return result.changes > 0;
+}
+
+// «Пообщались»: restarts the keep-in-touch clock. Not an edit of the
+// contact, so updated_at stays.
+export async function markTalked(
+  id: number,
+  db: Db = getDb(),
+): Promise<boolean> {
+  const result = db
+    .update(contacts)
+    .set({ talkedAt: new Date() })
     .where(eq(contacts.id, id))
     .run();
   return result.changes > 0;

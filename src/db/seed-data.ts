@@ -192,6 +192,7 @@ export type FeaturedContact = {
   metContext: string;
   phone?: string;
   email?: string;
+  keepInTouchDays?: number;
   // Days before "now", newest last.
   notes?: readonly { daysAgo: number; body: string }[];
 };
@@ -205,6 +206,7 @@ export const FEATURED_CONTACTS: readonly FeaturedContact[] = [
     metContext: "Конференция ProductCamp, 2025",
     phone: "+7 916 555-01-42",
     email: "anna.petrova@example.com",
+    keepInTouchDays: 30,
     notes: [
       {
         daysAgo: 123,
@@ -245,6 +247,7 @@ export const FEATURED_CONTACTS: readonly FeaturedContact[] = [
     last: "Соколова",
     gender: "f",
     metContext: "Соседка по даче",
+    keepInTouchDays: 90,
     notes: [{ daysAgo: 1, body: "Вернуть дрель до конца месяца" }],
   },
   {
@@ -259,6 +262,7 @@ export const FEATURED_CONTACTS: readonly FeaturedContact[] = [
     last: "Лебедева",
     gender: "f",
     metContext: "Через Бориса",
+    keepInTouchDays: 14,
     notes: [{ daysAgo: 14, body: "Юрист, можно спросить про договор аренды" }],
   },
   { first: "Егор", last: "Новиков", gender: "m", metContext: "Спортзал" },

@@ -1,5 +1,7 @@
 // The only home for Russian plurals and human-readable formatting.
 
+import type { KeepInTouchState } from "./keep-in-touch";
+
 type PluralForms = readonly [one: string, few: string, many: string];
 
 const pluralRules = new Intl.PluralRules("ru-RU");
@@ -65,6 +67,17 @@ export function formatNoteDate(date: Date, now: Date = new Date()): string {
     : `${dayMonth} ${date.getFullYear()}`;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Calendar days in this computer's time zone, like formatNoteDate:
+// 23:50 yesterday and 00:10 today are one day apart.
+export function calendarDaysBetween(from: Date, to: Date): number {
+  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+  // Rounding absorbs the 23- and 25-hour days of daylight saving time.
+  return Math.round((end.getTime() - start.getTime()) / DAY_MS);
+}
+
 export function formatTodayLabel(now: Date = new Date()): string {
   return `сегодня, ${dayMonthFormat.format(now)}`;
 }
@@ -93,4 +106,33 @@ export function deleteNoteQuestion(date: Date, now: Date = new Date()): string {
     return "Удалить вчерашнюю заметку?";
   }
   return `Удалить заметку от ${when}?`;
+}
+
+const DAY_FORMS: PluralForms = ["день", "дня", "дней"];
+
+export function formatDayCount(count: number): string {
+  return `${count} ${pluralize(count, DAY_FORMS)}`;
+}
+
+const KEEP_IN_TOUCH_LABELS: Record<number, string> = {
+  14: "Раз в 2 недели",
+  30: "Раз в месяц",
+  90: "Раз в 3 месяца",
+  180: "Раз в полгода",
+  365: "Раз в год",
+};
+
+export function formatKeepInTouch(days: number | null): string {
+  if (days === null) {
+    return "Не следить";
+  }
+  return KEEP_IN_TOUCH_LABELS[days] ?? `Раз в ${formatDayCount(days)}`;
+}
+
+// «Раз в месяц · пора написать: 45 дней без общения»
+export function formatKeepInTouchStatus(state: KeepInTouchState): string {
+  const rhythm = formatKeepInTouch(state.days);
+  return state.isDue
+    ? `${rhythm} · пора написать: ${formatDayCount(state.daysSince)} без общения`
+    : `${rhythm} · следующий раз через ${formatDayCount(state.daysLeft)}`;
 }

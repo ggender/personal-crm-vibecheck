@@ -9,13 +9,20 @@ vi.mock("./data/contacts-repo", () => ({
   createContact: vi.fn(),
   updateContact: vi.fn(),
   deleteContact: vi.fn(),
+  markTalked: vi.fn(),
 }));
 
 const { revalidatePath } = await import("next/cache");
 const notesRepo = await import("./data/notes-repo");
 const contactsRepo = await import("./data/contacts-repo");
-const { addNote, createContact, updateContact, deleteNote, deleteContact } =
-  await import("./actions");
+const {
+  addNote,
+  createContact,
+  updateContact,
+  deleteNote,
+  deleteContact,
+  markTalked,
+} = await import("./actions");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -92,6 +99,7 @@ describe("createContact action", () => {
       metContext: "Митап",
       phone: "",
       email: "",
+      keepInTouchDays: null,
       firstNote: "Пришлёт ссылку",
     });
     expect(revalidatePath).toHaveBeenCalledWith("/");
@@ -134,7 +142,30 @@ describe("updateContact action", () => {
       metContext: "",
       phone: "",
       email: "",
+      keepInTouchDays: null,
     });
+  });
+
+  it("saves how often to keep in touch", async () => {
+    vi.mocked(contactsRepo.updateContact).mockResolvedValue(true);
+
+    await updateContact({ id: 7, name: "Марк", keepInTouchDays: 30 });
+
+    expect(contactsRepo.updateContact).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ keepInTouchDays: 30 }),
+    );
+  });
+
+  it("refuses a rhythm outside the list", async () => {
+    expect(
+      await updateContact({ id: 7, name: "Марк", keepInTouchDays: 7 }),
+    ).toEqual({
+      ok: false,
+      fieldErrors: { keepInTouchDays: "Выбери из списка, как часто общаться" },
+      canRetry: false,
+    });
+    expect(contactsRepo.updateContact).not.toHaveBeenCalled();
   });
 
   it("says when the contact is gone", async () => {
@@ -225,6 +256,41 @@ describe("deleteContact action", () => {
   });
 });
 
+describe("markTalked action", () => {
+  it("marks that you talked and refreshes the page", async () => {
+    vi.mocked(contactsRepo.markTalked).mockResolvedValue(true);
+
+    expect(await markTalked({ contactId: 9 })).toEqual({ ok: true });
+    expect(contactsRepo.markTalked).toHaveBeenCalledWith(9);
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("says when the contact is gone", async () => {
+    vi.mocked(contactsRepo.markTalked).mockResolvedValue(false);
+
+    expect(await markTalked({ contactId: 9 })).toEqual({
+      ok: false,
+      error: "Такого контакта больше нет",
+      canRetry: false,
+    });
+  });
+
+  it("refuses a broken id without touching the database", async () => {
+    expect(await markTalked({ contactId: 0 })).toMatchObject({ ok: false });
+    expect(contactsRepo.markTalked).not.toHaveBeenCalled();
+  });
+
+  it("turns an unexpected failure into a retryable message", async () => {
+    vi.mocked(contactsRepo.markTalked).mockRejectedValue(new Error("locked"));
+
+    expect(await markTalked({ contactId: 9 })).toEqual({
+      ok: false,
+      error: "Не удалось отметить",
+      canRetry: true,
+    });
+  });
+});
+
 describe("action logs", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -281,6 +347,12 @@ describe("action logs", () => {
     await addNote({ contactId: 7, body: note });
     await addNote({ contactId: 7, body: note.repeat(300) });
 
+    vi.mocked(contactsRepo.markTalked)
+      .mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(queryError);
+    await markTalked({ contactId: 7 });
+    await markTalked({ contactId: 7 });
+
     const output = lines.join("\n");
     // Every path above was logged, so the check below is not empty.
     for (const event of [
@@ -294,6 +366,8 @@ describe("action logs", () => {
       "note.contact_missing",
       "note.add_failed",
       "note.rejected",
+      "contact.talked",
+      "contact.talk_failed",
     ]) {
       expect(output).toContain(event);
     }

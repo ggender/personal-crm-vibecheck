@@ -10,13 +10,20 @@ import {
   ContactMissing,
   StartHint,
 } from "@/features/contacts/components/empty-states";
+import { ListSwitch } from "@/features/contacts/components/list-switch";
 import { SearchInput } from "@/features/contacts/components/search-input";
 import {
   countContacts,
   getContact,
+  listKeepInTouch,
   searchContacts,
 } from "@/features/contacts/data/contacts-repo";
 import { listNotes } from "@/features/contacts/data/notes-repo";
+import {
+  keepInTouchState,
+  lastTalkAt,
+  selectDue,
+} from "@/features/contacts/keep-in-touch";
 import { splitSearchQuery } from "@/features/contacts/normalize-name";
 import {
   readScreenState,
@@ -25,27 +32,33 @@ import {
 } from "@/features/contacts/screen-url";
 import { log } from "@/lib/log";
 
-async function loadScreen(screen: ScreenState) {
+async function loadScreen(screen: ScreenState, now: Date) {
   try {
     const startedAt = performance.now();
-    const [contacts, total, card] = await Promise.all([
-      searchContacts(screen.q),
+    const [contacts, total, allDue, card] = await Promise.all([
+      screen.isDueList ? loadDue(screen.q, now) : searchContacts(screen.q),
       countContacts(),
-      loadCard(screen.contactId),
+      loadDue("", now),
+      loadCard(screen.contactId, now),
     ]);
     log.debug("contacts", "contacts.searched", {
       queryLength: screen.q.length,
+      isDueList: screen.isDueList,
       resultCount: contacts.length,
       ms: Math.round(performance.now() - startedAt),
     });
-    return { contacts, total, card };
+    return { contacts, total, dueCount: allDue.length, card };
   } catch (error) {
     log.error("db", "page.load_failed", error);
     throw error;
   }
 }
 
-async function loadCard(contactId: number | null) {
+async function loadDue(query: string, now: Date) {
+  return selectDue(await listKeepInTouch(query), now);
+}
+
+async function loadCard(contactId: number | null, now: Date) {
   if (contactId === null) {
     return null;
   }
@@ -53,27 +66,49 @@ async function loadCard(contactId: number | null) {
     getContact(contactId),
     listNotes(contactId),
   ]);
-  return contact ? { contact, notes } : null;
+  if (!contact) {
+    return null;
+  }
+  const keepInTouch =
+    contact.keepInTouchDays === null
+      ? null
+      : keepInTouchState(
+          contact.keepInTouchDays,
+          lastTalkAt({
+            createdAt: contact.createdAt,
+            talkedAt: contact.talkedAt,
+            // The feed is newest first.
+            lastNoteAt: notes[0]?.createdAt ?? null,
+          }),
+          now,
+        );
+  return { contact, notes, keepInTouch };
 }
 
 export default async function HomePage({ searchParams }: PageProps<"/">) {
   // The database is read on every request, never at build time.
   await connection();
   const screen = readScreenState(await searchParams);
-  const { contacts, total, card } = await loadScreen(screen);
-  const isCardRequested = screen.contactParam !== null;
   const now = new Date();
+  const { contacts, total, dueCount, card } = await loadScreen(screen, now);
+  const isCardRequested = screen.contactParam !== null;
 
   let rightPanel: ReactNode;
   if (screen.isNew) {
     rightPanel = (
-      <ContactForm key="new" query={screen.q} suggestedName={screen.newName} />
+      <ContactForm
+        key="new"
+        query={screen.q}
+        isDueList={screen.isDueList}
+        suggestedName={screen.newName}
+      />
     );
   } else if (card && screen.isEdit) {
     rightPanel = (
       <ContactForm
         key={`edit-${card.contact.id}`}
         query={screen.q}
+        isDueList={screen.isDueList}
         contact={card.contact}
       />
     );
@@ -82,12 +117,16 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       <ContactCard
         contact={card.contact}
         notes={card.notes}
+        keepInTouch={card.keepInTouch}
         now={now}
         query={screen.q}
+        isDueList={screen.isDueList}
       />
     );
   } else if (isCardRequested) {
-    rightPanel = <ContactMissing query={screen.q} />;
+    rightPanel = (
+      <ContactMissing query={screen.q} isDueList={screen.isDueList} />
+    );
   } else {
     rightPanel = <StartHint />;
   }
@@ -122,7 +161,11 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
               focusOnLoad={!isCardRequested && !screen.isNew}
             />
             <Link
-              href={screenHref({ q: screen.q, isNew: true })}
+              href={screenHref({
+                q: screen.q,
+                isDueList: screen.isDueList,
+                isNew: true,
+              })}
               scroll={false}
               aria-label="Добавить контакт"
               title="Добавить контакт"
@@ -135,11 +178,18 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
               <Plus aria-hidden />
             </Link>
           </div>
+          <ListSwitch
+            query={screen.q}
+            isDueList={screen.isDueList}
+            dueCount={dueCount}
+            contactId={card ? card.contact.id : null}
+          />
           <ContactList
             contacts={contacts}
-            total={total}
+            total={screen.isDueList ? dueCount : total}
             query={screen.q}
             isSearching={splitSearchQuery(screen.q).length > 0}
+            isDueList={screen.isDueList}
             selectedId={card ? card.contact.id : null}
           />
         </section>

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  KEEP_IN_TOUCH_DAYS,
   LIMITS,
   addNoteInput,
   createContactInput,
   fieldErrors,
   firstIssueMessage,
+  markTalkedInput,
   updateContactInput,
 } from "./validation";
 
@@ -64,6 +66,7 @@ describe("createContactInput", () => {
       metContext: "Митап по Next.js",
       phone: "+7 900 555-00-00",
       email: "mark@example.com",
+      keepInTouchDays: null,
       firstNote: "Пришлёт ссылку",
     });
     expect(createContactInput.parse({ name: "Марк" })).toMatchObject({
@@ -117,7 +120,50 @@ describe("updateContactInput", () => {
       metContext: "",
       phone: "",
       email: "",
+      keepInTouchDays: null,
     });
     expect(updateContactInput.safeParse({ name: "Марк" }).success).toBe(false);
+  });
+});
+
+describe("keepInTouchDays", () => {
+  it("means «не следить» when not given", () => {
+    expect(createContactInput.parse({ name: "Марк" }).keepInTouchDays).toBe(
+      null,
+    );
+    expect(
+      createContactInput.parse({ name: "Марк", keepInTouchDays: null })
+        .keepInTouchDays,
+    ).toBe(null);
+  });
+
+  it("accepts only the rhythms from the list", () => {
+    expect(KEEP_IN_TOUCH_DAYS).toEqual([14, 30, 90, 180, 365]);
+    for (const days of KEEP_IN_TOUCH_DAYS) {
+      expect(
+        updateContactInput.parse({ id: 4, name: "Марк", keepInTouchDays: days })
+          .keepInTouchDays,
+      ).toBe(days);
+    }
+    for (const days of [7, 0, -30, 30.5, "30", "abc"]) {
+      const result = updateContactInput.safeParse({
+        id: 4,
+        name: "Марк",
+        keepInTouchDays: days,
+      });
+      expect(result.success).toBe(false);
+      expect(fieldErrors(result.error!)).toEqual({
+        keepInTouchDays: "Выбери из списка, как часто общаться",
+      });
+    }
+  });
+});
+
+describe("markTalkedInput", () => {
+  it("requires a positive whole contact id", () => {
+    expect(markTalkedInput.parse({ contactId: 3 })).toEqual({ contactId: 3 });
+    for (const contactId of [0, -1, 1.5, "3", null]) {
+      expect(markTalkedInput.safeParse({ contactId }).success).toBe(false);
+    }
   });
 });

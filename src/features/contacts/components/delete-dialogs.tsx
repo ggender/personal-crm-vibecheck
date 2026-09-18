@@ -134,10 +134,12 @@ export function DeleteContactButton({
   contactId,
   question,
   query,
+  isDueList,
 }: {
   contactId: number;
   question: string;
   query: string;
+  isDueList: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -179,7 +181,7 @@ export function DeleteContactButton({
                 if (result.ok) {
                   setOpen(false);
                   // Back to the list, keeping the current search.
-                  router.push(screenHref({ q: query }));
+                  router.push(screenHref({ q: query, isDueList }));
                 }
                 return result;
               })

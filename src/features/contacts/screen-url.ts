@@ -1,10 +1,12 @@
-// The screen state lives in the address: /?q=анн&contact=412&edit=1, /?new=1&name=…
+// The screen state lives in the address: /?q=анн&contact=412&edit=1, /?new=1&name=…,
+// /?due=1 for the «Пора написать» list.
 // This file is the only place that reads and builds such addresses.
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
 export type ScreenState = {
   q: string;
+  isDueList: boolean;
   // Raw value, so a broken link can still say "this contact is gone".
   contactParam: string | null;
   contactId: number | null;
@@ -29,6 +31,7 @@ export function readScreenState(params: SearchParams): ScreenState {
   const contactParam = first(params.contact) ?? null;
   return {
     q: first(params.q) ?? "",
+    isDueList: first(params.due) === "1",
     contactParam,
     contactId: parseId(contactParam ?? undefined),
     isNew: first(params.new) === "1",
@@ -39,6 +42,7 @@ export function readScreenState(params: SearchParams): ScreenState {
 
 export type ScreenTarget = {
   q?: string;
+  isDueList?: boolean;
   contactId?: number | null;
   isEdit?: boolean;
   isNew?: boolean;
@@ -49,6 +53,9 @@ export function screenHref(target: ScreenTarget): string {
   const params = new URLSearchParams();
   if (target.q) {
     params.set("q", target.q);
+  }
+  if (target.isDueList) {
+    params.set("due", "1");
   }
   if (target.contactId != null) {
     params.set("contact", String(target.contactId));

@@ -2,6 +2,7 @@ import {
   buildContactRow,
   countContacts,
 } from "@/features/contacts/data/contacts-repo";
+import { KEEP_IN_TOUCH_DAYS } from "@/features/contacts/validation";
 import type { Db } from "./client";
 import { contacts, notes } from "./schema";
 import {
@@ -22,6 +23,10 @@ export const SEED_CONTACT_COUNT = 999;
 
 // Fixed seed: the same people every time the database is built from scratch.
 const RANDOM_SEED = 20260917;
+// Rhythms draw from their own sequence, so the people, their details and
+// notes stay the same as before rhythms existed.
+const RHYTHM_SEED = 20260918;
+const RHYTHM_SHARE = 0.04;
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Notes stay inside the last 18 months, contacts inside the last 2 years.
 const NOTE_WINDOW_DAYS = 540;
@@ -32,6 +37,7 @@ type SeedContact = {
   metContext: string;
   phone: string;
   email: string;
+  keepInTouchDays: number | null;
   createdAt: Date;
   notes: { body: string; createdAt: Date }[];
 };
@@ -53,6 +59,13 @@ function createRandom(seed: number): () => number {
 
 export function generateSeedContacts(now: Date): SeedContact[] {
   const random = createRandom(RANDOM_SEED);
+  const rhythmRandom = createRandom(RHYTHM_SEED);
+  const randomRhythm = () =>
+    rhythmRandom() < RHYTHM_SHARE
+      ? KEEP_IN_TOUCH_DAYS[
+          Math.floor(rhythmRandom() * KEEP_IN_TOUCH_DAYS.length)
+        ]
+      : null;
   const int = (max: number) => Math.floor(random() * max);
   const pick = <T>(items: readonly T[]): T => items[int(items.length)];
   const chance = (probability: number) => random() < probability;
@@ -89,6 +102,7 @@ export function generateSeedContacts(now: Date): SeedContact[] {
         email:
           featured.email ??
           (chance(0.5) ? randomEmail(featured.first, featured.last) : ""),
+        keepInTouchDays: featured.keepInTouchDays ?? null,
       },
       (featured.notes ?? []).map((note) => ({
         body: note.body,
@@ -123,6 +137,7 @@ export function generateSeedContacts(now: Date): SeedContact[] {
             : pickGendered(pick(MET_CONTEXTS), gender),
           phone: chance(0.6) ? randomPhone() : "",
           email: chance(0.5) ? randomEmail(first, last) : "",
+          keepInTouchDays: randomRhythm(),
         },
         Array.from({ length: noteCount }, () => ({
           body: pickGendered(pick(NOTE_TEMPLATES), gender),

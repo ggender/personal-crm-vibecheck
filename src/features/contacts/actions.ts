@@ -11,6 +11,7 @@ import {
   deleteNoteInput,
   fieldErrors,
   firstIssueMessage,
+  markTalkedInput,
   updateContactInput,
 } from "./validation";
 
@@ -165,6 +166,39 @@ export async function deleteNote(input: {
   } catch (error) {
     log.error("notes", "note.delete_failed", error, { noteId });
     return { ok: false, error: "Не удалось удалить заметку", canRetry: true };
+  }
+}
+
+// «Пообщались»: talked without writing a note.
+export async function markTalked(input: {
+  contactId: number;
+}): Promise<ActionResult> {
+  const parsed = markTalkedInput.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: firstIssueMessage(parsed.error),
+      canRetry: false,
+    };
+  }
+
+  const { contactId } = parsed.data;
+  try {
+    const marked = await contactsRepo.markTalked(contactId);
+    revalidatePath("/");
+    if (!marked) {
+      log.warn("contacts", "contact.missing", { contactId });
+      return {
+        ok: false,
+        error: "Такого контакта больше нет",
+        canRetry: false,
+      };
+    }
+    log.info("contacts", "contact.talked", { contactId });
+    return { ok: true };
+  } catch (error) {
+    log.error("contacts", "contact.talk_failed", error, { contactId });
+    return { ok: false, error: "Не удалось отметить", canRetry: true };
   }
 }
 

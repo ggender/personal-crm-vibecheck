@@ -41,6 +41,34 @@ export function NoSearchResults({ query }: { query: string }) {
   );
 }
 
+export function NoOneDue() {
+  return (
+    <div className="px-4 py-8 text-center">
+      <p className="font-medium">Сейчас никому не пора писать</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Как часто общаться с человеком, задаётся в его карточке: «Изменить» →
+        «Как часто общаться».
+      </p>
+    </div>
+  );
+}
+
+export function NoDueSearchResults({ query }: { query: string }) {
+  return (
+    <div className="px-4 py-8 text-center">
+      <p className="font-medium">
+        Среди тех, кому пора написать, никого не нашлось
+      </p>
+      <Link
+        href={screenHref({ q: query })}
+        className={buttonVariants({ variant: "outline", className: "mt-4" })}
+      >
+        Искать среди всех
+      </Link>
+    </div>
+  );
+}
+
 export function NoContactsYet() {
   return (
     <div className="px-4 py-8 text-center">
@@ -56,7 +84,13 @@ export function NoContactsYet() {
   );
 }
 
-export function ContactMissing({ query }: { query: string }) {
+export function ContactMissing({
+  query,
+  isDueList,
+}: {
+  query: string;
+  isDueList: boolean;
+}) {
   return (
     <div className="grid h-full min-h-64 place-items-center p-8 text-center">
       <div className="max-w-sm">
@@ -68,7 +102,7 @@ export function ContactMissing({ query }: { query: string }) {
           контактов работает как обычно.
         </p>
         <Link
-          href={screenHref({ q: query })}
+          href={screenHref({ q: query, isDueList })}
           className={buttonVariants({ variant: "outline", className: "mt-4" })}
         >
           К списку

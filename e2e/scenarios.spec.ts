@@ -46,6 +46,13 @@ async function addContact(
   await expect(cardHeading(page, fields.name)).toBeVisible();
 }
 
+// Server Functions are POST requests marked with the Next-Action header.
+function dropServerFunctions(route: Route) {
+  return route.request().headers()["next-action"]
+    ? route.abort()
+    : route.continue();
+}
+
 async function saveNote(page: Page, text: string) {
   await noteField(page).fill(text);
   await page.getByRole("button", { name: "Сохранить заметку" }).click();
@@ -101,11 +108,6 @@ test.describe("bad day (plan, section 5.2)", () => {
     page,
   }) => {
     const note = "Обещал перезвонить после отпуска";
-    // Server Functions are POST requests marked with the Next-Action header.
-    const dropServerFunctions = (route: Route) =>
-      route.request().headers()["next-action"]
-        ? route.abort()
-        : route.continue();
 
     await page.goto("/");
     await listRows(page).first().getByRole("link").click();
@@ -208,5 +210,130 @@ test.describe("odd cases (plan, section 5.3)", () => {
     await dialog.getByRole("button", { name: "Удалить", exact: true }).click();
     await expect.poll(() => readTotal(page)).toBe(total - 1);
     await expect(contactList(page).getByText(name)).toHaveCount(0);
+  });
+});
+
+test.describe("keep in touch (specs/04-keep-in-touch.md)", () => {
+  function dueLink(page: Page) {
+    return page.getByRole("link", { name: /^Пора написать/ });
+  }
+
+  // "Пора написать 7" above the list.
+  async function readDueCount(page: Page): Promise<number> {
+    const text = (await dueLink(page).textContent()) ?? "";
+    return Number.parseInt(text.replace(/\D/g, ""), 10);
+  }
+
+  function openContactId(page: Page): string | null {
+    return new URL(page.url()).searchParams.get("contact");
+  }
+
+  // Opens the first row and waits until its card is in the address.
+  async function openFirstRow(page: Page): Promise<string> {
+    const row = listRows(page).first().getByRole("link");
+    const id = (await row.getAttribute("data-contact-id")) ?? "";
+    await row.click();
+    await expect.poll(() => openContactId(page)).toBe(id);
+    return id;
+  }
+
+  // Uses the seed: a few of the 999 contacts keep in touch and are overdue.
+  test("«Пообщались» and a new note both take a contact off the list", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const before = await readDueCount(page);
+    expect(before).toBeGreaterThanOrEqual(2);
+
+    await dueLink(page).click();
+    await expect(dueLink(page)).toHaveAttribute("aria-current", "page");
+    await expect(listRows(page)).toHaveCount(before);
+    await expect(listRows(page).first()).toContainText(/\d+ д(ень|ня|ней)/);
+
+    // Talked without a note.
+    const talkedId = await openFirstRow(page);
+    await expect(page.getByText(/пора написать: \d+ д/)).toBeVisible();
+    await page.getByRole("button", { name: "Пообщались" }).click();
+    await expect(page.getByText(/следующий раз через \d+ д/)).toBeVisible();
+    await expect.poll(() => readDueCount(page)).toBe(before - 1);
+    await expect(
+      contactList(page).locator(`[data-contact-id="${talkedId}"]`),
+    ).toHaveCount(0);
+    // The list stays «Пора написать» and the card stays open.
+    expect(new URL(page.url()).searchParams.get("due")).toBe("1");
+    expect(openContactId(page)).toBe(talkedId);
+
+    // Wrote a note instead.
+    const notedId = await openFirstRow(page);
+    expect(notedId).not.toBe(talkedId);
+    await expect(page.getByText(/пора написать: \d+ д/)).toBeVisible();
+    await saveNote(page, "Написал, договорились созвониться в субботу");
+    await expect.poll(() => readDueCount(page)).toBe(before - 2);
+    await expect(
+      contactList(page).locator(`[data-contact-id="${notedId}"]`),
+    ).toHaveCount(0);
+  });
+
+  test("a «Пообщались» that failed to save says so and works on retry", async ({
+    page,
+  }) => {
+    await page.goto("/?due=1");
+    await openFirstRow(page);
+    await page.route("**/*", dropServerFunctions);
+    await page.getByRole("button", { name: "Пообщались" }).click();
+    await expect(
+      page.getByText("Не удалось отметить: приложение не отвечает"),
+    ).toBeVisible();
+    await expect(page.getByText(/пора написать: \d+ д/)).toBeVisible();
+
+    await page.unroute("**/*", dropServerFunctions);
+    await page.getByRole("button", { name: "Повторить" }).click();
+    await expect(page.getByText(/следующий раз через \d+ д/)).toBeVisible();
+    await expect(page.getByText("Не удалось отметить")).toBeHidden();
+  });
+
+  test("a rhythm is chosen in the contact form and can be removed", async ({
+    page,
+  }) => {
+    const name = "Лев Ритмов";
+    const rhythm = page.getByLabel("Как часто общаться");
+
+    await page.goto("/");
+    await page.getByRole("link", { name: "Добавить контакт" }).click();
+    await page.getByLabel("Имя").fill(name);
+    await rhythm.selectOption({ label: "Раз в 2 недели" });
+    await page.getByRole("button", { name: "Добавить", exact: true }).click();
+    await expect(cardHeading(page, name)).toBeVisible();
+    await expect(
+      page.getByText("Раз в 2 недели · следующий раз через 14 дней"),
+    ).toBeVisible();
+
+    await page.getByRole("link", { name: "Изменить" }).click();
+    await expect(rhythm).toHaveValue("14");
+    await rhythm.selectOption({ label: "Не следить" });
+    await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+    await expect(cardHeading(page, name)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Пообщались" })).toHaveCount(
+      0,
+    );
+  });
+
+  test("the search works inside the list and can widen to everyone", async ({
+    page,
+  }) => {
+    await page.goto("/?due=1");
+    await searchField(page).fill("ыыы");
+    await expect(
+      contactList(page).getByText(
+        "Среди тех, кому пора написать, никого не нашлось",
+      ),
+    ).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("due")).toBe("1");
+
+    await page.getByRole("link", { name: "Искать среди всех" }).click();
+    await expect(
+      contactList(page).getByText("Никого не нашлось", { exact: true }),
+    ).toBeVisible();
+    await expect(dueLink(page)).not.toHaveAttribute("aria-current", "page");
   });
 });

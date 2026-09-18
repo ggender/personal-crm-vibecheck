@@ -10,6 +10,9 @@ export const LIMITS = {
   note: 5000,
 } as const;
 
+// How often to keep in touch, in days: the only choices the form offers.
+export const KEEP_IN_TOUCH_DAYS = [14, 30, 90, 180, 365] as const;
+
 const contactId = z
   .number({ error: "Не удалось понять, какой это контакт" })
   .int({ error: "Не удалось понять, какой это контакт" })
@@ -34,6 +37,8 @@ export const deleteNoteInput = z.object({
 
 export const deleteContactInput = z.object({ contactId });
 
+export const markTalkedInput = z.object({ contactId });
+
 function optionalText(limit: number, label: string) {
   return z
     .string()
@@ -56,6 +61,13 @@ const contactFields = {
     (value) => value === "" || value.includes("@"),
     { error: "В почте должен быть знак @" },
   ),
+  // null means "не следить".
+  keepInTouchDays: z
+    .literal(KEEP_IN_TOUCH_DAYS, {
+      error: "Выбери из списка, как часто общаться",
+    })
+    .nullable()
+    .default(null),
 };
 
 export const createContactInput = z.object({

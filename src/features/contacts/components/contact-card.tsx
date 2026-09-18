@@ -4,17 +4,27 @@ import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import type { Contact } from "../data/contacts-repo";
 import type { Note } from "../data/notes-repo";
-import { deleteContactQuestion, formatTodayLabel } from "../format";
+import {
+  deleteContactQuestion,
+  formatKeepInTouch,
+  formatKeepInTouchStatus,
+  formatTodayLabel,
+} from "../format";
+import type { KeepInTouchState } from "../keep-in-touch";
 import { screenHref } from "../screen-url";
 import { DeleteContactButton } from "./delete-dialogs";
+import { MarkTalkedButton } from "./mark-talked-button";
 import { NoteForm } from "./note-form";
 import { NotesFeed } from "./notes-feed";
 
 type ContactCardProps = {
   contact: Contact;
   notes: Note[];
+  // null when nobody keeps in touch with this contact on a rhythm.
+  keepInTouch: KeepInTouchState | null;
   now: Date;
   query: string;
+  isDueList: boolean;
 };
 
 function Detail({ label, children }: { label: string; children: ReactNode }) {
@@ -31,7 +41,14 @@ function NotSet() {
 }
 
 // Order matters: the note comes before phone and email. This is not an address book.
-export function ContactCard({ contact, notes, now, query }: ContactCardProps) {
+export function ContactCard({
+  contact,
+  notes,
+  keepInTouch,
+  now,
+  query,
+  isDueList,
+}: ContactCardProps) {
   return (
     <article
       aria-labelledby="contact-name"
@@ -43,6 +60,21 @@ export function ContactCard({ contact, notes, now, query }: ContactCardProps) {
       >
         {contact.name}
       </h2>
+      {keepInTouch && (
+        <div className="-mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <p
+            aria-live="polite"
+            className={
+              keepInTouch.isDue
+                ? "text-sm font-medium"
+                : "text-sm text-muted-foreground"
+            }
+          >
+            {formatKeepInTouchStatus(keepInTouch)}
+          </p>
+          <MarkTalkedButton key={contact.id} contactId={contact.id} />
+        </div>
+      )}
       <NoteForm
         key={contact.id}
         contactId={contact.id}
@@ -77,10 +109,24 @@ export function ContactCard({ contact, notes, now, query }: ContactCardProps) {
             <NotSet />
           )}
         </Detail>
+        <Detail label="Как часто общаться">
+          {contact.keepInTouchDays === null ? (
+            <span className="text-muted-foreground">
+              {formatKeepInTouch(null)}
+            </span>
+          ) : (
+            formatKeepInTouch(contact.keepInTouchDays)
+          )}
+        </Detail>
       </dl>
       <div className="flex flex-wrap gap-2">
         <Link
-          href={screenHref({ q: query, contactId: contact.id, isEdit: true })}
+          href={screenHref({
+            q: query,
+            isDueList,
+            contactId: contact.id,
+            isEdit: true,
+          })}
           scroll={false}
           className={buttonVariants({ variant: "outline", size: "lg" })}
         >
@@ -90,6 +136,7 @@ export function ContactCard({ contact, notes, now, query }: ContactCardProps) {
         <DeleteContactButton
           contactId={contact.id}
           query={query}
+          isDueList={isDueList}
           question={deleteContactQuestion(contact.name, notes.length)}
         />
       </div>

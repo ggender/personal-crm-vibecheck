@@ -7,10 +7,19 @@ describe("readScreenState", () => {
       q: "",
       contactParam: null,
       contactId: null,
+      isDueList: false,
       isNew: false,
       isEdit: false,
       newName: "",
     });
+  });
+
+  it("reads the «Пора написать» list", () => {
+    expect(readScreenState({ due: "1", q: "анн" })).toMatchObject({
+      isDueList: true,
+      q: "анн",
+    });
+    expect(readScreenState({ due: "yes" })).toMatchObject({ isDueList: false });
   });
 
   it("reads every part of the screen", () => {
@@ -63,14 +72,23 @@ describe("screenHref", () => {
     );
   });
 
+  it("keeps the «Пора написать» list next to the search", () => {
+    expect(screenHref({ isDueList: true })).toBe("/?due=1");
+    expect(screenHref({ q: "анн", isDueList: true, contactId: 5 })).toBe(
+      "/?q=%D0%B0%D0%BD%D0%BD&due=1&contact=5",
+    );
+    expect(screenHref({ isDueList: false, contactId: 5 })).toBe("/?contact=5");
+  });
+
   it("round-trips through readScreenState", () => {
-    const href = screenHref({ q: "100% _", contactId: 5 });
+    const href = screenHref({ q: "100% _", contactId: 5, isDueList: true });
     const params = Object.fromEntries(
       new URL(href, "http://localhost").searchParams,
     );
     expect(readScreenState(params)).toMatchObject({
       q: "100% _",
       contactId: 5,
+      isDueList: true,
     });
   });
 });
