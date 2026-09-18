@@ -3,8 +3,9 @@ import {
   countContacts,
 } from "@/features/contacts/data/contacts-repo";
 import { KEEP_IN_TOUCH_DAYS } from "@/features/contacts/validation";
+import { eq } from "drizzle-orm";
 import type { Db } from "./client";
-import { contacts, notes } from "./schema";
+import { contacts, notes, users } from "./schema";
 import {
   DOUBLE_FIRST_NAMES,
   FEATURED_CONTACTS,
@@ -20,6 +21,10 @@ import {
 } from "./seed-data";
 
 export const SEED_CONTACT_COUNT = 999;
+
+// The account that owns the fictional contacts. Migration 0001 uses the same
+// address for contacts from before accounts existed.
+export const DEMO_EMAIL = "demo@example.com";
 
 // Fixed seed: the same people every time the database is built from scratch.
 const RANDOM_SEED = 20260917;
@@ -149,12 +154,26 @@ export function generateSeedContacts(now: Date): SeedContact[] {
   return people;
 }
 
-// Safe to run again: does nothing if the database has any contacts.
+async function demoUserId(db: Db): Promise<number> {
+  await db
+    .insert(users)
+    .values({ name: "", email: DEMO_EMAIL, emailVerified: true })
+    .onConflictDoNothing({ target: users.email });
+  const [{ id }] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, DEMO_EMAIL));
+  return id;
+}
+
+// Safe to run again: does nothing if the demo account has any contacts.
+// Other accounts are never touched.
 export async function seedDatabase(
   db: Db,
   now: Date = new Date(),
 ): Promise<SeedResult> {
-  const existing = await countContacts(db);
+  const ownerId = await demoUserId(db);
+  const existing = await countContacts(ownerId, db);
   if (existing > 0) {
     return { status: "skipped", contacts: existing };
   }
@@ -165,7 +184,7 @@ export async function seedDatabase(
     for (const person of people) {
       const [{ id }] = await tx
         .insert(contacts)
-        .values(buildContactRow(person, person.createdAt))
+        .values({ ...buildContactRow(person, person.createdAt), ownerId })
         .returning({ id: contacts.id });
       if (person.notes.length > 0) {
         await tx
@@ -176,7 +195,7 @@ export async function seedDatabase(
     }
   });
 
-  const total = await countContacts(db);
+  const total = await countContacts(ownerId, db);
   if (total !== SEED_CONTACT_COUNT) {
     throw new Error(
       `Seed expected ${SEED_CONTACT_COUNT} contacts but found ${total}`,

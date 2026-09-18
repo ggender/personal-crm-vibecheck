@@ -15,9 +15,15 @@ export function pluralize(count: number, forms: PluralForms): string {
 }
 
 const CONTACT_FORMS: PluralForms = ["контакт", "контакта", "контактов"];
+// Accusative, as in «действует 5 минут».
+const MINUTE_FORMS: PluralForms = ["минуту", "минуты", "минут"];
 
 export function formatContactCount(count: number): string {
   return `${count} ${pluralize(count, CONTACT_FORMS)}`;
+}
+
+export function formatMinuteCount(count: number): string {
+  return `${count} ${pluralize(count, MINUTE_FORMS)}`;
 }
 
 export function formatFoundCount(found: number, total: number): string {

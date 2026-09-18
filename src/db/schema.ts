@@ -1,9 +1,122 @@
-import { index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
+
+// users, sessions, accounts and verifications belong to Better Auth: their
+// shape comes from `npx auth generate` (features/auth/data/auth.ts). Keep
+// field names as generated; only the index names follow this project.
+
+export const users = pgTable("users", {
+  id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+  // Magic-link sign-up leaves it empty; the app does not ask for a name.
+  name: text("name").notNull(),
+  // Always lowercase: validation.ts of the auth feature lowercases it.
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").default(false).notNull(),
+  image: text("image"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
+
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    token: text("token").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .$onUpdate(() => new Date())
+      .notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (table) => [index("sessions_user_id_idx").on(table.userId)],
+);
+
+// Sign-in methods such as Google. Better Auth needs the table; magic links
+// do not use it.
+export const accounts = pgTable(
+  "accounts",
+  {
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [index("accounts_user_id_idx").on(table.userId)],
+);
+
+// Magic links: identifier is the hash of the token, never the token itself.
+export const verifications = pgTable(
+  "verifications",
+  {
+    id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at", {
+      withTimezone: true,
+      mode: "date",
+    }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [index("verifications_identifier_idx").on(table.identifier)],
+);
 
 export const contacts = pgTable(
   "contacts",
   {
     id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    // Whose notebook the contact is in; every query of the repositories
+    // filters by it.
+    ownerId: integer("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     // Always normalizeName(name); set by the contacts repository.
     nameSearch: text("name_search").notNull(),
@@ -23,7 +136,12 @@ export const contacts = pgTable(
       mode: "date",
     }).notNull(),
   },
-  (table) => [index("contacts_name_search_idx").on(table.nameSearch)],
+  (table) => [
+    index("contacts_owner_id_name_search_idx").on(
+      table.ownerId,
+      table.nameSearch,
+    ),
+  ],
 );
 
 export const notes = pgTable(

@@ -40,7 +40,8 @@ export type ContactFields = {
 export type NewContact = ContactFields & { firstNote?: string };
 
 // The one place that turns input into a stored row: name_search always
-// follows the name. Also used by the seed script.
+// follows the name. Also used by the seed script. The owner is added by the
+// caller.
 export function buildContactRow(fields: ContactFields, now: Date) {
   const name = fields.name.trim();
   return {
@@ -67,6 +68,11 @@ const contactColumns = {
   updatedAt: contacts.updatedAt,
 };
 
+// Someone else's contact looks exactly like a missing one.
+function isOwned(ownerId: number, id: number) {
+  return and(eq(contacts.ownerId, ownerId), eq(contacts.id, id));
+}
+
 // Every word of the query must be part of the name.
 function nameMatches(query: string) {
   return splitSearchQuery(query).map(
@@ -76,6 +82,7 @@ function nameMatches(query: string) {
 }
 
 export async function searchContacts(
+  ownerId: number,
   query: string,
   db: Db = getDb(),
 ): Promise<ContactListItem[]> {
@@ -86,13 +93,14 @@ export async function searchContacts(
       metContext: contacts.metContext,
     })
     .from(contacts)
-    .where(and(...nameMatches(query)))
+    .where(and(eq(contacts.ownerId, ownerId), ...nameMatches(query)))
     .orderBy(asc(contacts.nameSearch), asc(contacts.id));
 }
 
 // Contacts with a rhythm, alphabetically; which of them are due is decided
 // by keep-in-touch.ts.
 export async function listKeepInTouch(
+  ownerId: number,
   query: string,
   db: Db = getDb(),
 ): Promise<KeepInTouchItem[]> {
@@ -108,7 +116,13 @@ export async function listKeepInTouch(
     })
     .from(contacts)
     .leftJoin(notes, eq(notes.contactId, contacts.id))
-    .where(and(isNotNull(contacts.keepInTouchDays), ...nameMatches(query)))
+    .where(
+      and(
+        eq(contacts.ownerId, ownerId),
+        isNotNull(contacts.keepInTouchDays),
+        ...nameMatches(query),
+      ),
+    )
     .groupBy(contacts.id)
     .orderBy(asc(contacts.nameSearch), asc(contacts.id));
   return rows.flatMap(({ keepInTouchDays, ...row }) =>
@@ -116,23 +130,31 @@ export async function listKeepInTouch(
   );
 }
 
-export async function countContacts(db: Db = getDb()): Promise<number> {
-  const [row] = await db.select({ value: count() }).from(contacts);
+export async function countContacts(
+  ownerId: number,
+  db: Db = getDb(),
+): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(contacts)
+    .where(eq(contacts.ownerId, ownerId));
   return row?.value ?? 0;
 }
 
 export async function getContact(
+  ownerId: number,
   id: number,
   db: Db = getDb(),
 ): Promise<Contact | null> {
   const [contact] = await db
     .select(contactColumns)
     .from(contacts)
-    .where(eq(contacts.id, id));
+    .where(isOwned(ownerId, id));
   return contact ?? null;
 }
 
 export async function createContact(
+  ownerId: number,
   input: NewContact,
   db: Db = getDb(),
 ): Promise<number> {
@@ -141,7 +163,7 @@ export async function createContact(
   return db.transaction(async (tx) => {
     const [{ id }] = await tx
       .insert(contacts)
-      .values(buildContactRow(input, now))
+      .values({ ...buildContactRow(input, now), ownerId })
       .returning({ id: contacts.id });
     if (firstNote !== "") {
       await tx
@@ -153,6 +175,7 @@ export async function createContact(
 }
 
 export async function updateContact(
+  ownerId: number,
   id: number,
   fields: ContactFields,
   db: Db = getDb(),
@@ -177,7 +200,7 @@ export async function updateContact(
       keepInTouchDays,
       updatedAt,
     })
-    .where(eq(contacts.id, id))
+    .where(isOwned(ownerId, id))
     .returning({ id: contacts.id });
   return updated.length > 0;
 }
@@ -185,25 +208,27 @@ export async function updateContact(
 // «Пообщались»: restarts the keep-in-touch clock. Not an edit of the
 // contact, so updated_at stays.
 export async function markTalked(
+  ownerId: number,
   id: number,
   db: Db = getDb(),
 ): Promise<boolean> {
   const marked = await db
     .update(contacts)
     .set({ talkedAt: new Date() })
-    .where(eq(contacts.id, id))
+    .where(isOwned(ownerId, id))
     .returning({ id: contacts.id });
   return marked.length > 0;
 }
 
 // Notes go too: the foreign key is ON DELETE CASCADE.
 export async function deleteContact(
+  ownerId: number,
   id: number,
   db: Db = getDb(),
 ): Promise<boolean> {
   const deleted = await db
     .delete(contacts)
-    .where(eq(contacts.id, id))
+    .where(isOwned(ownerId, id))
     .returning({ id: contacts.id });
   return deleted.length > 0;
 }

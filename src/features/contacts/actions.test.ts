@@ -5,6 +5,7 @@ vi.mock("./data/notes-repo", () => ({
   addNote: vi.fn(),
   deleteNote: vi.fn(),
 }));
+vi.mock("@/features/auth/session", () => ({ getCurrentUser: vi.fn() }));
 vi.mock("./data/contacts-repo", () => ({
   createContact: vi.fn(),
   updateContact: vi.fn(),
@@ -13,6 +14,7 @@ vi.mock("./data/contacts-repo", () => ({
 }));
 
 const { revalidatePath } = await import("next/cache");
+const { getCurrentUser } = await import("@/features/auth/session");
 const notesRepo = await import("./data/notes-repo");
 const contactsRepo = await import("./data/contacts-repo");
 const {
@@ -24,8 +26,15 @@ const {
   markTalked,
 } = await import("./actions");
 
+// The signed-in user; every repository call gets their id as the owner.
+const OWNER = 42;
+
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(getCurrentUser).mockResolvedValue({
+    id: OWNER,
+    email: "owner@example.com",
+  });
 });
 
 describe("addNote action", () => {
@@ -40,7 +49,7 @@ describe("addNote action", () => {
     const result = await addNote({ contactId: 3, body: "  Созвон " });
 
     expect(result).toEqual({ ok: true });
-    expect(notesRepo.addNote).toHaveBeenCalledWith(3, "Созвон");
+    expect(notesRepo.addNote).toHaveBeenCalledWith(OWNER, 3, "Созвон");
     expect(revalidatePath).toHaveBeenCalledWith("/");
   });
 
@@ -94,7 +103,7 @@ describe("createContact action", () => {
     });
 
     expect(result).toEqual({ ok: true, contactId: 1000 });
-    expect(contactsRepo.createContact).toHaveBeenCalledWith({
+    expect(contactsRepo.createContact).toHaveBeenCalledWith(OWNER, {
       name: "Марк Орлов",
       metContext: "Митап",
       phone: "",
@@ -137,7 +146,7 @@ describe("updateContact action", () => {
     const result = await updateContact({ id: 7, name: "Марк Орлов-Соколов" });
 
     expect(result).toEqual({ ok: true, contactId: 7 });
-    expect(contactsRepo.updateContact).toHaveBeenCalledWith(7, {
+    expect(contactsRepo.updateContact).toHaveBeenCalledWith(OWNER, 7, {
       name: "Марк Орлов-Соколов",
       metContext: "",
       phone: "",
@@ -152,6 +161,7 @@ describe("updateContact action", () => {
     await updateContact({ id: 7, name: "Марк", keepInTouchDays: 30 });
 
     expect(contactsRepo.updateContact).toHaveBeenCalledWith(
+      OWNER,
       7,
       expect.objectContaining({ keepInTouchDays: 30 }),
     );
@@ -194,7 +204,7 @@ describe("deleteNote action", () => {
     vi.mocked(notesRepo.deleteNote).mockResolvedValue(true);
 
     expect(await deleteNote({ noteId: 5 })).toEqual({ ok: true });
-    expect(notesRepo.deleteNote).toHaveBeenCalledWith(5);
+    expect(notesRepo.deleteNote).toHaveBeenCalledWith(OWNER, 5);
     expect(revalidatePath).toHaveBeenCalledWith("/");
   });
 
@@ -224,7 +234,7 @@ describe("deleteContact action", () => {
     vi.mocked(contactsRepo.deleteContact).mockResolvedValue(true);
 
     expect(await deleteContact({ contactId: 9 })).toEqual({ ok: true });
-    expect(contactsRepo.deleteContact).toHaveBeenCalledWith(9);
+    expect(contactsRepo.deleteContact).toHaveBeenCalledWith(OWNER, 9);
     expect(revalidatePath).toHaveBeenCalledWith("/");
   });
 
@@ -261,7 +271,7 @@ describe("markTalked action", () => {
     vi.mocked(contactsRepo.markTalked).mockResolvedValue(true);
 
     expect(await markTalked({ contactId: 9 })).toEqual({ ok: true });
-    expect(contactsRepo.markTalked).toHaveBeenCalledWith(9);
+    expect(contactsRepo.markTalked).toHaveBeenCalledWith(OWNER, 9);
     expect(revalidatePath).toHaveBeenCalledWith("/");
   });
 
@@ -288,6 +298,57 @@ describe("markTalked action", () => {
       error: "Не удалось отметить",
       canRetry: true,
     });
+  });
+});
+
+describe("without a session", () => {
+  const signedOut = {
+    ok: false,
+    error: "Вход истёк — войди снова",
+    canRetry: false,
+  };
+
+  beforeEach(() => {
+    vi.mocked(getCurrentUser).mockResolvedValue(null);
+  });
+
+  it("every action refuses without touching the data", async () => {
+    expect(await addNote({ contactId: 3, body: "Созвон" })).toEqual(signedOut);
+    expect(await createContact({ name: "Марк" })).toEqual(signedOut);
+    expect(await updateContact({ id: 7, name: "Марк" })).toEqual(signedOut);
+    expect(await deleteNote({ noteId: 5 })).toEqual(signedOut);
+    expect(await deleteContact({ contactId: 9 })).toEqual(signedOut);
+    expect(await markTalked({ contactId: 9 })).toEqual(signedOut);
+
+    for (const repoFunction of [
+      notesRepo.addNote,
+      notesRepo.deleteNote,
+      contactsRepo.createContact,
+      contactsRepo.updateContact,
+      contactsRepo.deleteContact,
+      contactsRepo.markTalked,
+    ]) {
+      expect(repoFunction).not.toHaveBeenCalled();
+    }
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("when the session cannot be checked", () => {
+  it("answers with the action's retryable message", async () => {
+    vi.mocked(getCurrentUser).mockRejectedValue(new Error("db down"));
+
+    expect(await addNote({ contactId: 3, body: "Созвон" })).toEqual({
+      ok: false,
+      error: "Не удалось сохранить заметку",
+      canRetry: true,
+    });
+    expect(await markTalked({ contactId: 9 })).toEqual({
+      ok: false,
+      error: "Не удалось отметить",
+      canRetry: true,
+    });
+    expect(notesRepo.addNote).not.toHaveBeenCalled();
   });
 });
 
@@ -353,6 +414,9 @@ describe("action logs", () => {
     await markTalked({ contactId: 7 });
     await markTalked({ contactId: 7 });
 
+    vi.mocked(getCurrentUser).mockResolvedValueOnce(null);
+    await addNote({ contactId: 7, body: note });
+
     const output = lines.join("\n");
     // Every path above was logged, so the check below is not empty.
     for (const event of [
@@ -368,6 +432,7 @@ describe("action logs", () => {
       "note.rejected",
       "contact.talked",
       "contact.talk_failed",
+      "session.missing",
     ]) {
       expect(output).toContain(event);
     }

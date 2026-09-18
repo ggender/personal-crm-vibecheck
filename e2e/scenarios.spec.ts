@@ -1,7 +1,9 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { DEMO_STATE } from "./login";
 
 // Scenarios from specs/02-план-сборки.md, run in a real browser against the
-// seeded database. Each test creates what it needs, so the order does not matter.
+// seeded database, signed in as the demo account (auth.setup.ts). Each test
+// creates what it needs, so the order does not matter.
 
 function contactList(page: Page) {
   return page.getByRole("region", { name: "Список контактов" });
@@ -93,8 +95,9 @@ test.describe("success criterion (plan, section 3)", () => {
     await page.reload();
     await expect(notes(page).first()).toContainText(note);
 
-    // The same address in another browser shows the same data.
-    const otherBrowser = await browser.newContext();
+    // The same address in another browser, signed in to the same account,
+    // shows the same data.
+    const otherBrowser = await browser.newContext({ storageState: DEMO_STATE });
     const otherPage = await otherBrowser.newPage();
     await otherPage.goto(page.url());
     await expect(cardHeading(otherPage, "Марк Орлов")).toBeVisible();

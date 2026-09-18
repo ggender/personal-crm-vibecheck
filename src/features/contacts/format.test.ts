@@ -8,6 +8,7 @@ import {
   formatFoundCount,
   formatKeepInTouch,
   formatKeepInTouchStatus,
+  formatMinuteCount,
   formatNoteCount,
   formatNoteDate,
   formatTodayLabel,
@@ -234,5 +235,14 @@ describe("formatKeepInTouchStatus", () => {
         isDue: false,
       }),
     ).toBe("Раз в 2 недели · следующий раз через 1 день");
+  });
+});
+
+describe("formatMinuteCount", () => {
+  it("names the minutes with the right ending", () => {
+    expect(formatMinuteCount(1)).toBe("1 минуту");
+    expect(formatMinuteCount(3)).toBe("3 минуты");
+    expect(formatMinuteCount(5)).toBe("5 минут");
+    expect(formatMinuteCount(21)).toBe("21 минуту");
   });
 });

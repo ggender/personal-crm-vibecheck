@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/features/auth/session";
 import { log } from "@/lib/log";
 import * as contactsRepo from "./data/contacts-repo";
 import * as notesRepo from "./data/notes-repo";
@@ -31,6 +32,24 @@ function idOf(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
+// The page is still open, but the session has ended (expired or signed out
+// in another tab). The typed text stays in the form.
+const SIGNED_OUT = {
+  ok: false,
+  error: "Вход истёк — войди снова",
+  canRetry: false,
+} as const;
+
+function signedOut() {
+  log.warn("auth", "session.missing");
+  return SIGNED_OUT;
+}
+
+// The owner of everything the action may touch; null when signed out.
+async function currentOwnerId(): Promise<number | null> {
+  return (await getCurrentUser())?.id ?? null;
+}
+
 export async function addNote(input: {
   contactId: number;
   body: string;
@@ -51,7 +70,11 @@ export async function addNote(input: {
 
   const { contactId, body } = parsed.data;
   try {
-    const note = await notesRepo.addNote(contactId, body);
+    const ownerId = await currentOwnerId();
+    if (ownerId === null) {
+      return signedOut();
+    }
+    const note = await notesRepo.addNote(ownerId, contactId, body);
     revalidatePath("/");
     if (!note) {
       log.warn("notes", "note.contact_missing", { contactId });
@@ -91,7 +114,11 @@ export async function createContact(input: unknown): Promise<FormResult> {
   }
 
   try {
-    const contactId = await contactsRepo.createContact(parsed.data);
+    const ownerId = await currentOwnerId();
+    if (ownerId === null) {
+      return signedOut();
+    }
+    const contactId = await contactsRepo.createContact(ownerId, parsed.data);
     revalidatePath("/");
     log.info("contacts", "contact.created", {
       contactId,
@@ -119,7 +146,11 @@ export async function updateContact(input: unknown): Promise<FormResult> {
 
   const { id, ...fields } = parsed.data;
   try {
-    const updated = await contactsRepo.updateContact(id, fields);
+    const ownerId = await currentOwnerId();
+    if (ownerId === null) {
+      return signedOut();
+    }
+    const updated = await contactsRepo.updateContact(ownerId, id, fields);
     revalidatePath("/");
     if (!updated) {
       log.warn("contacts", "contact.missing", { contactId: id });
@@ -155,7 +186,11 @@ export async function deleteNote(input: {
 
   const { noteId } = parsed.data;
   try {
-    const deleted = await notesRepo.deleteNote(noteId);
+    const ownerId = await currentOwnerId();
+    if (ownerId === null) {
+      return signedOut();
+    }
+    const deleted = await notesRepo.deleteNote(ownerId, noteId);
     revalidatePath("/");
     if (!deleted) {
       log.warn("notes", "note.missing", { noteId });
@@ -184,7 +219,11 @@ export async function markTalked(input: {
 
   const { contactId } = parsed.data;
   try {
-    const marked = await contactsRepo.markTalked(contactId);
+    const ownerId = await currentOwnerId();
+    if (ownerId === null) {
+      return signedOut();
+    }
+    const marked = await contactsRepo.markTalked(ownerId, contactId);
     revalidatePath("/");
     if (!marked) {
       log.warn("contacts", "contact.missing", { contactId });
@@ -217,7 +256,11 @@ export async function deleteContact(input: {
 
   const { contactId } = parsed.data;
   try {
-    const deleted = await contactsRepo.deleteContact(contactId);
+    const ownerId = await currentOwnerId();
+    if (ownerId === null) {
+      return signedOut();
+    }
+    const deleted = await contactsRepo.deleteContact(ownerId, contactId);
     revalidatePath("/");
     if (!deleted) {
       log.warn("contacts", "contact.missing", { contactId });

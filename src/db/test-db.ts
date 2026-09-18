@@ -28,3 +28,12 @@ export async function createTestDb(): Promise<TestDb> {
   const client = (await template.clone()) as PGlite;
   return drizzle({ client, schema });
 }
+
+// An account to own contacts in repository tests.
+export async function createTestUser(db: Db, email: string): Promise<number> {
+  const [{ id }] = await db
+    .insert(schema.users)
+    .values({ name: "", email, emailVerified: true })
+    .returning({ id: schema.users.id });
+  return id;
+}

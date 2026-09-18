@@ -4,7 +4,7 @@
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export type LogThreshold = LogLevel | "silent";
-export type LogCategory = "contacts" | "notes" | "db" | "seed";
+export type LogCategory = "contacts" | "notes" | "auth" | "db" | "seed";
 export type LogFields = Record<string, number | boolean | null | undefined>;
 
 const LEVEL_RANK: Record<LogThreshold, number> = {

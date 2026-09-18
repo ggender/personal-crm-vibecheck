@@ -2,7 +2,9 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import { connection } from "next/server";
 import type { ReactNode } from "react";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { logout } from "@/features/auth/actions";
+import { requireUser } from "@/features/auth/session";
 import { ContactCard } from "@/features/contacts/components/contact-card";
 import { ContactForm } from "@/features/contacts/components/contact-form";
 import { ContactList } from "@/features/contacts/components/contact-list";
@@ -32,14 +34,16 @@ import {
 } from "@/features/contacts/screen-url";
 import { log } from "@/lib/log";
 
-async function loadScreen(screen: ScreenState, now: Date) {
+async function loadScreen(ownerId: number, screen: ScreenState, now: Date) {
   try {
     const startedAt = performance.now();
     const [contacts, total, allDue, card] = await Promise.all([
-      screen.isDueList ? loadDue(screen.q, now) : searchContacts(screen.q),
-      countContacts(),
-      loadDue("", now),
-      loadCard(screen.contactId, now),
+      screen.isDueList
+        ? loadDue(ownerId, screen.q, now)
+        : searchContacts(ownerId, screen.q),
+      countContacts(ownerId),
+      loadDue(ownerId, "", now),
+      loadCard(ownerId, screen.contactId, now),
     ]);
     log.debug("contacts", "contacts.searched", {
       queryLength: screen.q.length,
@@ -56,17 +60,17 @@ async function loadScreen(screen: ScreenState, now: Date) {
   }
 }
 
-async function loadDue(query: string, now: Date) {
-  return selectDue(await listKeepInTouch(query), now);
+async function loadDue(ownerId: number, query: string, now: Date) {
+  return selectDue(await listKeepInTouch(ownerId, query), now);
 }
 
-async function loadCard(contactId: number | null, now: Date) {
+async function loadCard(ownerId: number, contactId: number | null, now: Date) {
   if (contactId === null) {
     return null;
   }
   const [contact, notes] = await Promise.all([
-    getContact(contactId),
-    listNotes(contactId),
+    getContact(ownerId, contactId),
+    listNotes(ownerId, contactId),
   ]);
   if (!contact) {
     return null;
@@ -90,9 +94,14 @@ async function loadCard(contactId: number | null, now: Date) {
 export default async function HomePage({ searchParams }: PageProps<"/">) {
   // The database is read on every request, never at build time.
   await connection();
+  const user = await requireUser();
   const screen = readScreenState(await searchParams);
   const now = new Date();
-  const { contacts, total, dueCount, card } = await loadScreen(screen, now);
+  const { contacts, total, dueCount, card } = await loadScreen(
+    user.id,
+    screen,
+    now,
+  );
   const isCardRequested = screen.contactParam !== null;
 
   let rightPanel: ReactNode;
@@ -135,7 +144,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
 
   return (
     <div className="flex min-h-dvh flex-col md:h-dvh">
-      <header className="flex h-11 shrink-0 items-center border-b bg-card px-4">
+      <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b bg-card px-4">
         <h1 className="font-heading text-lg font-semibold">
           <Link
             href="/"
@@ -144,6 +153,14 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
             Личная CRM
           </Link>
         </h1>
+        <form action={logout} className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm text-muted-foreground">
+            {user.email}
+          </span>
+          <Button type="submit" variant="ghost" size="sm">
+            Выйти
+          </Button>
+        </form>
       </header>
       <main className="grid flex-1 grid-cols-1 md:min-h-0 md:grid-cols-[minmax(18rem,36%)_1fr]">
         {/* Without this, the keyboard has to walk through the whole list. */}

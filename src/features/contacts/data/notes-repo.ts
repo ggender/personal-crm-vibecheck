@@ -1,6 +1,6 @@
-import { count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { getDb, type Db } from "@/db/client";
-import { notes } from "@/db/schema";
+import { contacts, notes } from "@/db/schema";
 
 export type Note = {
   id: number;
@@ -8,6 +8,8 @@ export type Note = {
   body: string;
   createdAt: Date;
 };
+
+// A note has no owner of its own: it belongs to the owner of its contact.
 
 // Postgres error code foreign_key_violation.
 const FOREIGN_KEY_VIOLATION = "23503";
@@ -23,23 +25,48 @@ function isForeignKeyError(error: unknown): boolean {
   return false;
 }
 
+const noteColumns = {
+  id: notes.id,
+  contactId: notes.contactId,
+  body: notes.body,
+  createdAt: notes.createdAt,
+};
+
+function ownContactIds(ownerId: number, db: Db) {
+  return db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(eq(contacts.ownerId, ownerId));
+}
+
 export async function listNotes(
+  ownerId: number,
   contactId: number,
   db: Db = getDb(),
 ): Promise<Note[]> {
   return db
-    .select()
+    .select(noteColumns)
     .from(notes)
-    .where(eq(notes.contactId, contactId))
+    .innerJoin(contacts, eq(contacts.id, notes.contactId))
+    .where(and(eq(notes.contactId, contactId), eq(contacts.ownerId, ownerId)))
     .orderBy(desc(notes.createdAt), desc(notes.id));
 }
 
-// Returns null when the contact is gone (e.g. deleted in another tab).
+// Returns null when the contact is gone (e.g. deleted in another tab) or is
+// someone else's.
 export async function addNote(
+  ownerId: number,
   contactId: number,
   body: string,
   db: Db = getDb(),
 ): Promise<Note | null> {
+  const [contact] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.id, contactId), eq(contacts.ownerId, ownerId)));
+  if (!contact) {
+    return null;
+  }
   try {
     const [note] = await db
       .insert(notes)
@@ -47,6 +74,7 @@ export async function addNote(
       .returning();
     return note;
   } catch (error) {
+    // Deleted between the check and the insert.
     if (isForeignKeyError(error)) {
       return null;
     }
@@ -55,23 +83,31 @@ export async function addNote(
 }
 
 export async function deleteNote(
+  ownerId: number,
   id: number,
   db: Db = getDb(),
 ): Promise<boolean> {
   const deleted = await db
     .delete(notes)
-    .where(eq(notes.id, id))
+    .where(
+      and(
+        eq(notes.id, id),
+        inArray(notes.contactId, ownContactIds(ownerId, db)),
+      ),
+    )
     .returning({ id: notes.id });
   return deleted.length > 0;
 }
 
 export async function countNotes(
+  ownerId: number,
   contactId: number,
   db: Db = getDb(),
 ): Promise<number> {
   const [row] = await db
     .select({ value: count() })
     .from(notes)
-    .where(eq(notes.contactId, contactId));
+    .innerJoin(contacts, eq(contacts.id, notes.contactId))
+    .where(and(eq(notes.contactId, contactId), eq(contacts.ownerId, ownerId)));
   return row?.value ?? 0;
 }

@@ -28,6 +28,7 @@ Example: `LOG_LEVEL=debug npm run dev`. Tests run with `silent`.
 | ---------- | ---------------------------------------------------------------- |
 | `contacts` | list, search, create, update, delete contacts, mark talked       |
 | `notes`    | add and delete notes                                             |
+| `auth`     | login letters, sign-ups, sessions, Better Auth's own messages    |
 | `db`       | connections, creating the database, migrations, page load errors |
 | `seed`     | seed and reset scripts                                           |
 
@@ -36,7 +37,11 @@ Example: `LOG_LEVEL=debug npm run dev`. Tests run with `silent`.
 Name events `<thing>.<what_happened>` in past tense, snake_case after the dot:
 `contact.created`, `contact.updated`, `contact.deleted`, `contact.talked`, `note.added`, `note.deleted`,
 `note.rejected`, `note.add_failed`, `db.pool_created`, `db.pool_error`, `db.created`, `db.migrated`, `page.load_failed`,
-`seed.done`, `seed.skipped`.
+`seed.done`, `seed.skipped`, `login_link.sent`, `login_link.send_failed`, `user.created`, `session.created`,
+`session.ended`, `session.missing` (an action came without a session), `session.check_failed`.
+
+Better Auth's own messages arrive as `better_auth.warn` / `better_auth.error`: its texts are not written, an error is
+described by its innermost cause.
 
 What to log:
 
@@ -48,7 +53,10 @@ What to log:
 ## Privacy rule
 
 Only ids, counts, lengths and durations. **Never** names, `met_context`, phones, emails, note texts or
-search queries — log `queryLength`, not the query.
+search queries — log `queryLength`, not the query. The same for signing in: **never** the address a letter goes to,
+login links, their tokens or session tokens — log `userId`. An SMTP error is logged by its code only (its text often
+names the recipient), and the development server does not print requests to `/api/auth/magic-link/verify`
+(`next.config.ts`), because the address of a login link carries its token.
 
 The logger enforces part of this: fields accept only numbers and booleans. Errors are described by their
 innermost cause (name, code, message), because wrapping errors from Drizzle put query params (personal

@@ -46,3 +46,6 @@ next-env.d.ts
 
 # installed AI skill with its own git history
 /.claude/skills/vibe-check/
+
+# e2e sign-in kept between scenarios
+/e2e/.auth/

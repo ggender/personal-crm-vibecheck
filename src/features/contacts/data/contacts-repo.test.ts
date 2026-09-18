@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { contacts, notes } from "@/db/schema";
-import { createTestDb, type TestDb } from "@/db/test-db";
+import { createTestDb, createTestUser, type TestDb } from "@/db/test-db";
 import {
   countContacts,
   createContact,
@@ -15,9 +15,13 @@ import {
 import { addNote, listNotes } from "./notes-repo";
 
 let db: TestDb;
+let owner: number;
+let stranger: number;
 
 beforeEach(async () => {
   db = await createTestDb();
+  owner = await createTestUser(db, "owner@example.com");
+  stranger = await createTestUser(db, "stranger@example.com");
 });
 
 afterEach(async () => {
@@ -34,14 +38,14 @@ async function nameSearchOf(id: number): Promise<string | undefined> {
 }
 
 async function names(query: string): Promise<string[]> {
-  return (await searchContacts(query, db)).map((contact) => contact.name);
+  return (await searchContacts(owner, query, db)).map((contact) => contact.name);
 }
 
 describe("createContact", () => {
   it("trims the name and stores its search form", async () => {
-    const id = await createContact({ name: "  Семён Королёв  " }, db);
+    const id = await createContact(owner, { name: "  Семён Королёв  " }, db);
 
-    const contact = await getContact(id, db);
+    const contact = await getContact(owner, id, db);
     expect(contact?.name).toBe("Семён Королёв");
     expect(await nameSearchOf(id)).toBe("семен королев");
   });
@@ -50,9 +54,9 @@ describe("createContact", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-09-17T10:00:00Z"));
 
-    const id = await createContact({ name: "Анна Петрова" }, db);
+    const id = await createContact(owner, { name: "Анна Петрова" }, db);
 
-    expect(await getContact(id, db)).toEqual({
+    expect(await getContact(owner, id, db)).toEqual({
       id,
       name: "Анна Петрова",
       metContext: "",
@@ -66,16 +70,16 @@ describe("createContact", () => {
   });
 
   it("stores how often to keep in touch", async () => {
-    const id = await createContact(
+    const id = await createContact(owner, 
       { name: "Анна Петрова", keepInTouchDays: 30 },
       db,
     );
 
-    expect(await getContact(id, db)).toMatchObject({ keepInTouchDays: 30 });
+    expect(await getContact(owner, id, db)).toMatchObject({ keepInTouchDays: 30 });
   });
 
   it("saves the first note together with the contact", async () => {
-    const id = await createContact(
+    const id = await createContact(owner, 
       {
         name: "Анна Петрова",
         metContext: "Конференция ProductCamp, 2025",
@@ -86,21 +90,21 @@ describe("createContact", () => {
       db,
     );
 
-    expect(await getContact(id, db)).toMatchObject({
+    expect(await getContact(owner, id, db)).toMatchObject({
       metContext: "Конференция ProductCamp, 2025",
       phone: "+7 916 555-01-42",
       email: "anna@example.com",
     });
-    const saved = await listNotes(id, db);
+    const saved = await listNotes(owner, id, db);
     expect(saved.map((note) => note.body)).toEqual([
       "Пришлёт ссылку на свой доклад",
     ]);
   });
 
   it("skips a blank first note", async () => {
-    const id = await createContact({ name: "Анна", firstNote: "   " }, db);
+    const id = await createContact(owner, { name: "Анна", firstNote: "   " }, db);
 
-    expect(await listNotes(id, db)).toEqual([]);
+    expect(await listNotes(owner, id, db)).toEqual([]);
   });
 
   it("does not keep the contact when the first note fails", async () => {
@@ -112,9 +116,9 @@ describe("createContact", () => {
     `);
 
     await expect(
-      createContact({ name: "Анна", firstNote: "Заметка" }, db),
+      createContact(owner, { name: "Анна", firstNote: "Заметка" }, db),
     ).rejects.toThrow();
-    expect(await countContacts(db)).toBe(0);
+    expect(await countContacts(owner, db)).toBe(0);
   });
 });
 
@@ -130,7 +134,7 @@ describe("searchContacts", () => {
       "Скидка 100% Магазин",
       "Имя_с_подчёркиванием",
     ]) {
-      await createContact({ name }, db);
+      await createContact(owner, { name }, db);
     }
   });
 
@@ -166,9 +170,9 @@ describe("searchContacts", () => {
   });
 
   it("returns everyone in alphabetical order for an empty query, with Ё in place", async () => {
-    await createContact({ name: "Егор Новиков" }, db);
-    await createContact({ name: "Ёжиков Лев" }, db);
-    await createContact({ name: "Дарья Лебедева" }, db);
+    await createContact(owner, { name: "Егор Новиков" }, db);
+    await createContact(owner, { name: "Ёжиков Лев" }, db);
+    await createContact(owner, { name: "Дарья Лебедева" }, db);
 
     expect(await names("   ")).toEqual([
       "Анна Петрова",
@@ -186,14 +190,14 @@ describe("searchContacts", () => {
   });
 
   it("returns only what the list needs", async () => {
-    const [first] = await searchContacts("петрова", db);
+    const [first] = await searchContacts(owner, "петрова", db);
     expect(Object.keys(first).sort()).toEqual(["id", "metContext", "name"]);
   });
 });
 
 describe("getContact", () => {
   it("returns null for a missing contact", async () => {
-    expect(await getContact(12345, db)).toBeNull();
+    expect(await getContact(owner, 12345, db)).toBeNull();
   });
 });
 
@@ -201,10 +205,10 @@ describe("updateContact", () => {
   it("updates fields, the search form and the change date", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-09-01T10:00:00Z"));
-    const id = await createContact({ name: "Марк Орлов" }, db);
+    const id = await createContact(owner, { name: "Марк Орлов" }, db);
 
     vi.setSystemTime(new Date("2026-09-17T10:00:00Z"));
-    const updated = await updateContact(
+    const updated = await updateContact(owner, 
       id,
       {
         name: " Марк Орлов-Соколов ",
@@ -217,7 +221,7 @@ describe("updateContact", () => {
     );
 
     expect(updated).toBe(true);
-    expect(await getContact(id, db)).toEqual({
+    expect(await getContact(owner, id, db)).toEqual({
       id,
       name: "Марк Орлов-Соколов",
       metContext: "Митап по Next.js",
@@ -232,15 +236,15 @@ describe("updateContact", () => {
   });
 
   it("stops keeping in touch when the rhythm is removed", async () => {
-    const id = await createContact({ name: "Марк", keepInTouchDays: 30 }, db);
+    const id = await createContact(owner, { name: "Марк", keepInTouchDays: 30 }, db);
 
-    await updateContact(id, { name: "Марк", keepInTouchDays: null }, db);
+    await updateContact(owner, id, { name: "Марк", keepInTouchDays: null }, db);
 
-    expect(await getContact(id, db)).toMatchObject({ keepInTouchDays: null });
+    expect(await getContact(owner, id, db)).toMatchObject({ keepInTouchDays: null });
   });
 
   it("returns false for a missing contact", async () => {
-    expect(await updateContact(12345, { name: "Никто" }, db)).toBe(false);
+    expect(await updateContact(owner, 12345, { name: "Никто" }, db)).toBe(false);
   });
 });
 
@@ -248,19 +252,19 @@ describe("markTalked", () => {
   it("stamps when you talked and leaves the change date alone", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-09-01T10:00:00Z"));
-    const id = await createContact({ name: "Марк", keepInTouchDays: 14 }, db);
+    const id = await createContact(owner, { name: "Марк", keepInTouchDays: 14 }, db);
 
     vi.setSystemTime(new Date("2026-09-17T10:00:00Z"));
-    expect(await markTalked(id, db)).toBe(true);
+    expect(await markTalked(owner, id, db)).toBe(true);
 
-    expect(await getContact(id, db)).toMatchObject({
+    expect(await getContact(owner, id, db)).toMatchObject({
       talkedAt: new Date("2026-09-17T10:00:00Z"),
       updatedAt: new Date("2026-09-01T10:00:00Z"),
     });
   });
 
   it("returns false for a missing contact", async () => {
-    expect(await markTalked(12345, db)).toBe(false);
+    expect(await markTalked(owner, 12345, db)).toBe(false);
   });
 });
 
@@ -268,22 +272,22 @@ describe("listKeepInTouch", () => {
   it("returns only contacts with a rhythm, with the times the rules need", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-08-01T10:00:00Z"));
-    const anna = await createContact(
+    const anna = await createContact(owner, 
       { name: "Анна Петрова", keepInTouchDays: 30, firstNote: "Первая" },
       db,
     );
-    const boris = await createContact(
+    const boris = await createContact(owner, 
       { name: "Борис Ковалёв", keepInTouchDays: 14 },
       db,
     );
-    await createContact({ name: "Вера Соколова", firstNote: "Без ритма" }, db);
+    await createContact(owner, { name: "Вера Соколова", firstNote: "Без ритма" }, db);
 
     vi.setSystemTime(new Date("2026-09-10T10:00:00Z"));
-    await addNote(anna, "Последняя", db);
+    await addNote(owner, anna, "Последняя", db);
     vi.setSystemTime(new Date("2026-09-12T10:00:00Z"));
-    await markTalked(boris, db);
+    await markTalked(owner, boris, db);
 
-    expect(await listKeepInTouch("", db)).toEqual([
+    expect(await listKeepInTouch(owner, "", db)).toEqual([
       {
         id: anna,
         name: "Анна Петрова",
@@ -307,12 +311,12 @@ describe("listKeepInTouch", () => {
 
   it("narrows by name the same way as the search", async () => {
     for (const name of ["Анна Петрова", "Семён Королёв", "Иван Аннин"]) {
-      await createContact({ name, keepInTouchDays: 30 }, db);
+      await createContact(owner, { name, keepInTouchDays: 30 }, db);
     }
-    await createContact({ name: "Анна Жукова" }, db);
+    await createContact(owner, { name: "Анна Жукова" }, db);
 
     const found = async (query: string) =>
-      (await listKeepInTouch(query, db)).map((contact) => contact.name);
+      (await listKeepInTouch(owner, query, db)).map((contact) => contact.name);
 
     expect(await found("анн")).toEqual(["Анна Петрова", "Иван Аннин"]);
     expect(await found("семен")).toEqual(["Семён Королёв"]);
@@ -322,28 +326,71 @@ describe("listKeepInTouch", () => {
 
 describe("deleteContact", () => {
   it("removes the contact together with its notes", async () => {
-    const id = await createContact({ name: "Анна", firstNote: "Первая" }, db);
-    await addNote(id, "Вторая", db);
-    const otherId = await createContact({ name: "Борис" }, db);
-    await addNote(otherId, "Чужая заметка", db);
+    const id = await createContact(owner, { name: "Анна", firstNote: "Первая" }, db);
+    await addNote(owner, id, "Вторая", db);
+    const otherId = await createContact(owner, { name: "Борис" }, db);
+    await addNote(owner, otherId, "Чужая заметка", db);
 
-    expect(await deleteContact(id, db)).toBe(true);
+    expect(await deleteContact(owner, id, db)).toBe(true);
 
-    expect(await getContact(id, db)).toBeNull();
+    expect(await getContact(owner, id, db)).toBeNull();
     const left = await db.select({ contactId: notes.contactId }).from(notes);
     expect(left).toEqual([{ contactId: otherId }]);
   });
 
   it("returns false for a missing contact", async () => {
-    expect(await deleteContact(12345, db)).toBe(false);
+    expect(await deleteContact(owner, 12345, db)).toBe(false);
   });
 });
 
 describe("countContacts", () => {
-  it("counts all contacts", async () => {
-    expect(await countContacts(db)).toBe(0);
-    await createContact({ name: "Анна" }, db);
-    await createContact({ name: "Борис" }, db);
-    expect(await countContacts(db)).toBe(2);
+  it("counts all contacts of the owner", async () => {
+    expect(await countContacts(owner, db)).toBe(0);
+    await createContact(owner, { name: "Анна" }, db);
+    await createContact(owner, { name: "Борис" }, db);
+    expect(await countContacts(owner, db)).toBe(2);
+  });
+});
+
+describe("another owner's contacts", () => {
+  let theirs: number;
+
+  beforeEach(async () => {
+    theirs = await createContact(
+      stranger,
+      { name: "Анна Чужая", keepInTouchDays: 14, firstNote: "Чужая заметка" },
+      db,
+    );
+    await createContact(owner, { name: "Анна Своя", keepInTouchDays: 14 }, db);
+  });
+
+  it("are not listed, searched or counted", async () => {
+    expect(await names("")).toEqual(["Анна Своя"]);
+    expect(await names("чужая")).toEqual([]);
+    expect(
+      (await listKeepInTouch(owner, "", db)).map((contact) => contact.name),
+    ).toEqual(["Анна Своя"]);
+    expect(await countContacts(owner, db)).toBe(1);
+  });
+
+  it("cannot be opened", async () => {
+    expect(await getContact(owner, theirs, db)).toBeNull();
+    expect(await getContact(stranger, theirs, db)).toMatchObject({
+      name: "Анна Чужая",
+    });
+  });
+
+  it("cannot be changed, marked or deleted", async () => {
+    expect(await updateContact(owner, theirs, { name: "Взлом" }, db)).toBe(
+      false,
+    );
+    expect(await markTalked(owner, theirs, db)).toBe(false);
+    expect(await deleteContact(owner, theirs, db)).toBe(false);
+
+    expect(await getContact(stranger, theirs, db)).toMatchObject({
+      name: "Анна Чужая",
+      talkedAt: null,
+    });
+    expect(await listNotes(stranger, theirs, db)).toHaveLength(1);
   });
 });

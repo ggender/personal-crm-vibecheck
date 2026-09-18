@@ -6,9 +6,10 @@ import {
 } from "@/features/contacts/keep-in-touch";
 import { normalizeName } from "@/features/contacts/normalize-name";
 import { KEEP_IN_TOUCH_DAYS } from "@/features/contacts/validation";
-import { contacts, notes } from "./schema";
-import { SEED_CONTACT_COUNT, seedDatabase } from "./seed-database";
-import { createTestDb, type TestDb } from "./test-db";
+import { eq } from "drizzle-orm";
+import { contacts, notes, users } from "./schema";
+import { DEMO_EMAIL, SEED_CONTACT_COUNT, seedDatabase } from "./seed-database";
+import { createTestDb, createTestUser, type TestDb } from "./test-db";
 
 const now = new Date("2026-09-17T12:00:00Z");
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -47,13 +48,54 @@ describe("seedDatabase", () => {
     expect(await allRows(db)).toEqual(before);
   });
 
-  it("leaves a database with any contacts alone", async () => {
+  it("gives every contact to the demo account", async () => {
     const db = await createTestDb();
-    await createContact({ name: "Моя Анна" }, db);
+
+    await seedDatabase(db, now);
+
+    const demo = await db
+      .select({ id: users.id, emailVerified: users.emailVerified })
+      .from(users)
+      .where(eq(users.email, DEMO_EMAIL));
+    expect(DEMO_EMAIL).toBe("demo@example.com");
+    expect(demo).toEqual([{ id: expect.any(Number), emailVerified: true }]);
+    const owners = new Set(
+      (await allRows(db)).contacts.map((contact) => contact.ownerId),
+    );
+    expect([...owners]).toEqual([demo[0].id]);
+  });
+
+  it("uses the demo account the migration already made", async () => {
+    const db = await createTestDb();
+    const demoId = await createTestUser(db, DEMO_EMAIL);
+
+    await seedDatabase(db, now);
+
+    const owners = new Set(
+      (await allRows(db)).contacts.map((contact) => contact.ownerId),
+    );
+    expect([...owners]).toEqual([demoId]);
+  });
+
+  it("leaves a demo account with any contacts alone", async () => {
+    const db = await createTestDb();
+    const demoId = await createTestUser(db, DEMO_EMAIL);
+    await createContact(demoId, { name: "Моя Анна" }, db);
 
     const result = await seedDatabase(db, now);
 
     expect(result).toEqual({ status: "skipped", contacts: 1 });
+  });
+
+  it("seeds the demo account even when other accounts have contacts", async () => {
+    const db = await createTestDb();
+    const otherId = await createTestUser(db, "anna@example.com");
+    await createContact(otherId, { name: "Своя Анна" }, db);
+
+    const result = await seedDatabase(db, now);
+
+    expect(result).toMatchObject({ status: "seeded", contacts: 999 });
+    expect((await allRows(db)).contacts).toHaveLength(1000);
   });
 
   it("produces the same data every time", async () => {
