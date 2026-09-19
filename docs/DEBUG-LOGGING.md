@@ -28,6 +28,7 @@ Example: `LOG_LEVEL=debug npm run dev`. Tests run with `silent`.
 | ---------- | ---------------------------------------------------------------- |
 | `contacts` | list, search, create, update, delete contacts, mark talked       |
 | `notes`    | add and delete notes                                             |
+| `groups`   | create, rename and delete groups                                 |
 | `auth`     | login letters, sign-ups, sessions, Better Auth's own messages    |
 | `db`       | connections, creating the database, migrations, page load errors |
 | `seed`     | seed and reset scripts                                           |
@@ -36,7 +37,8 @@ Example: `LOG_LEVEL=debug npm run dev`. Tests run with `silent`.
 
 Name events `<thing>.<what_happened>` in past tense, snake_case after the dot:
 `contact.created`, `contact.updated`, `contact.deleted`, `contact.talked`, `note.added`, `note.deleted`,
-`note.rejected`, `note.add_failed`, `db.pool_created`, `db.pool_error`, `db.created`, `db.migrated`, `page.load_failed`,
+`note.rejected`, `note.add_failed`, `group.created`, `group.renamed`, `group.deleted`, `group.rejected`,
+`group.name_taken`, `group.missing`, `group.create_failed`, `db.pool_created`, `db.pool_error`, `db.created`, `db.migrated`, `page.load_failed`,
 `seed.done`, `seed.skipped`, `login_link.sent`, `login_link.send_failed`, `user.created`, `session.created`,
 `session.ended`, `session.missing` (an action came without a session), `session.check_failed`.
 
@@ -52,7 +54,7 @@ What to log:
 
 ## Privacy rule
 
-Only ids, counts, lengths and durations. **Never** names, `met_context`, phones, emails, note texts or
+Only ids, counts, lengths and durations. **Never** names, `met_context`, phones, emails, note texts, group names or
 search queries — log `queryLength`, not the query. The same for signing in: **never** the address a letter goes to,
 login links, their tokens or session tokens — log `userId`. An SMTP error is logged by its code only (its text often
 names the recipient), and the development server does not print requests to `/api/auth/magic-link/verify`

@@ -103,6 +103,10 @@ export function deleteContactQuestion(name: string, noteCount: number): string {
   return `Удалить контакт «${name}» и ${noteCount} ${pluralize(noteCount, NOTE_FORMS_ACCUSATIVE)}?`;
 }
 
+export function deleteGroupQuestion(name: string): string {
+  return `Удалить группу «${name}»?`;
+}
+
 export function deleteNoteQuestion(date: Date, now: Date = new Date()): string {
   const when = formatNoteDate(date, now);
   if (when === "сегодня") {

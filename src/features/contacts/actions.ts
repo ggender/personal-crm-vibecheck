@@ -4,15 +4,19 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/features/auth/session";
 import { log } from "@/lib/log";
 import * as contactsRepo from "./data/contacts-repo";
+import * as groupsRepo from "./data/groups-repo";
 import * as notesRepo from "./data/notes-repo";
 import {
   addNoteInput,
   createContactInput,
+  createGroupInput,
   deleteContactInput,
+  deleteGroupInput,
   deleteNoteInput,
   fieldErrors,
   firstIssueMessage,
   markTalkedInput,
+  renameGroupInput,
   updateContactInput,
 } from "./validation";
 
@@ -23,6 +27,10 @@ export type FormResult =
   | { ok: true; contactId: number }
   | { ok: false; error: string; canRetry: boolean }
   | { ok: false; fieldErrors: Record<string, string>; canRetry: false };
+
+export type CreateGroupResult =
+  | { ok: true; groupId: number }
+  | { ok: false; error: string; canRetry: boolean };
 
 function lengthOf(value: unknown): number | undefined {
   return typeof value === "string" ? value.length : undefined;
@@ -123,6 +131,7 @@ export async function createContact(input: unknown): Promise<FormResult> {
     log.info("contacts", "contact.created", {
       contactId,
       withFirstNote: parsed.data.firstNote !== "",
+      groupCount: parsed.data.groupIds.length,
     });
     return { ok: true, contactId };
   } catch (error) {
@@ -160,7 +169,10 @@ export async function updateContact(input: unknown): Promise<FormResult> {
         canRetry: false,
       };
     }
-    log.info("contacts", "contact.updated", { contactId: id });
+    log.info("contacts", "contact.updated", {
+      contactId: id,
+      groupCount: fields.groupIds.length,
+    });
     return { ok: true, contactId: id };
   } catch (error) {
     log.error("contacts", "contact.update_failed", error, { contactId: id });
@@ -275,5 +287,137 @@ export async function deleteContact(input: {
   } catch (error) {
     log.error("contacts", "contact.delete_failed", error, { contactId });
     return { ok: false, error: "Не удалось удалить контакт", canRetry: true };
+  }
+}
+
+function nameTaken(name: string) {
+  return {
+    ok: false,
+    error: `Группа «${name}» уже есть`,
+    canRetry: false,
+  } as const;
+}
+
+const GROUP_MISSING = {
+  ok: false,
+  error: "Такой группы больше нет",
+  canRetry: false,
+} as const;
+
+export async function createGroup(input: {
+  name: string;
+}): Promise<CreateGroupResult> {
+  const parsed = createGroupInput.safeParse(input);
+  if (!parsed.success) {
+    log.warn("groups", "group.rejected", {
+      length: lengthOf(input?.name),
+      issueCount: parsed.error.issues.length,
+    });
+    return {
+      ok: false,
+      error: firstIssueMessage(parsed.error),
+      canRetry: false,
+    };
+  }
+
+  const { name } = parsed.data;
+  try {
+    const ownerId = await currentOwnerId();
+    if (ownerId === null) {
+      return signedOut();
+    }
+    const group = await groupsRepo.createGroup(ownerId, name);
+    if (!group) {
+      log.warn("groups", "group.name_taken", { length: name.length });
+      return nameTaken(name);
+    }
+    revalidatePath("/");
+    log.info("groups", "group.created", {
+      groupId: group.id,
+      length: name.length,
+    });
+    return { ok: true, groupId: group.id };
+  } catch (error) {
+    log.error("groups", "group.create_failed", error);
+    return { ok: false, error: "Не удалось создать группу", canRetry: true };
+  }
+}
+
+export async function renameGroup(input: {
+  groupId: number;
+  name: string;
+}): Promise<ActionResult> {
+  const parsed = renameGroupInput.safeParse(input);
+  if (!parsed.success) {
+    log.warn("groups", "group.rejected", {
+      groupId: idOf(input?.groupId),
+      length: lengthOf(input?.name),
+      issueCount: parsed.error.issues.length,
+    });
+    return {
+      ok: false,
+      error: firstIssueMessage(parsed.error),
+      canRetry: false,
+    };
+  }
+
+  const { groupId, name } = parsed.data;
+  try {
+    const ownerId = await currentOwnerId();
+    if (ownerId === null) {
+      return signedOut();
+    }
+    const result = await groupsRepo.renameGroup(ownerId, groupId, name);
+    if (result === "name_taken") {
+      log.warn("groups", "group.name_taken", { groupId, length: name.length });
+      return nameTaken(name);
+    }
+    revalidatePath("/");
+    if (result === "missing") {
+      log.warn("groups", "group.missing", { groupId });
+      return GROUP_MISSING;
+    }
+    log.info("groups", "group.renamed", { groupId, length: name.length });
+    return { ok: true };
+  } catch (error) {
+    log.error("groups", "group.rename_failed", error, { groupId });
+    return {
+      ok: false,
+      error: "Не удалось переименовать группу",
+      canRetry: true,
+    };
+  }
+}
+
+// The contacts of the group stay; only the group goes.
+export async function deleteGroup(input: {
+  groupId: number;
+}): Promise<ActionResult> {
+  const parsed = deleteGroupInput.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: firstIssueMessage(parsed.error),
+      canRetry: false,
+    };
+  }
+
+  const { groupId } = parsed.data;
+  try {
+    const ownerId = await currentOwnerId();
+    if (ownerId === null) {
+      return signedOut();
+    }
+    const deleted = await groupsRepo.deleteGroup(ownerId, groupId);
+    revalidatePath("/");
+    if (!deleted) {
+      log.warn("groups", "group.missing", { groupId });
+      return GROUP_MISSING;
+    }
+    log.info("groups", "group.deleted", { groupId });
+    return { ok: true };
+  } catch (error) {
+    log.error("groups", "group.delete_failed", error, { groupId });
+    return { ok: false, error: "Не удалось удалить группу", canRetry: true };
   }
 }

@@ -12,6 +12,8 @@ import {
   ContactMissing,
   StartHint,
 } from "@/features/contacts/components/empty-states";
+import { GroupSwitch } from "@/features/contacts/components/group-switch";
+import { GroupsPanel } from "@/features/contacts/components/groups-panel";
 import { ListSwitch } from "@/features/contacts/components/list-switch";
 import { SearchInput } from "@/features/contacts/components/search-input";
 import {
@@ -19,7 +21,12 @@ import {
   getContact,
   listKeepInTouch,
   searchContacts,
+  type GroupFilter,
 } from "@/features/contacts/data/contacts-repo";
+import {
+  listContactGroups,
+  listGroups,
+} from "@/features/contacts/data/groups-repo";
 import { listNotes } from "@/features/contacts/data/notes-repo";
 import {
   keepInTouchState,
@@ -28,6 +35,7 @@ import {
 } from "@/features/contacts/keep-in-touch";
 import { splitSearchQuery } from "@/features/contacts/normalize-name";
 import {
+  knownGroupFilter,
   readScreenState,
   screenHref,
   type ScreenState,
@@ -37,21 +45,31 @@ import { log } from "@/lib/log";
 async function loadScreen(ownerId: number, screen: ScreenState, now: Date) {
   try {
     const startedAt = performance.now();
-    const [contacts, total, allDue, card] = await Promise.all([
+    const groups = await listGroups(ownerId);
+    const groupFilter = knownGroupFilter(screen.groupFilter, groups);
+    const allDue = loadDue(ownerId, "", null, now);
+    const [contacts, total, dueCount, card] = await Promise.all([
       screen.isDueList
-        ? loadDue(ownerId, screen.q, now)
-        : searchContacts(ownerId, screen.q),
-      countContacts(ownerId),
-      loadDue(ownerId, "", now),
+        ? loadDue(ownerId, screen.q, groupFilter, now)
+        : searchContacts(ownerId, screen.q, groupFilter),
+      // How many the list would show without the search.
+      screen.isDueList
+        ? (groupFilter === null
+            ? allDue
+            : loadDue(ownerId, "", groupFilter, now)
+          ).then((due) => due.length)
+        : countContacts(ownerId, groupFilter),
+      allDue.then((due) => due.length),
       loadCard(ownerId, screen.contactId, now),
     ]);
     log.debug("contacts", "contacts.searched", {
       queryLength: screen.q.length,
       isDueList: screen.isDueList,
+      isGroupShown: groupFilter !== null,
       resultCount: contacts.length,
       ms: Math.round(performance.now() - startedAt),
     });
-    return { contacts, total, dueCount: allDue.length, card };
+    return { contacts, total, dueCount, card, groups, groupFilter };
   } catch (error) {
     log.error("db", "page.load_failed", error);
     // Next.js prints what is thrown, and Drizzle's error carries the query
@@ -60,17 +78,23 @@ async function loadScreen(ownerId: number, screen: ScreenState, now: Date) {
   }
 }
 
-async function loadDue(ownerId: number, query: string, now: Date) {
-  return selectDue(await listKeepInTouch(ownerId, query), now);
+async function loadDue(
+  ownerId: number,
+  query: string,
+  group: GroupFilter,
+  now: Date,
+) {
+  return selectDue(await listKeepInTouch(ownerId, query, group), now);
 }
 
 async function loadCard(ownerId: number, contactId: number | null, now: Date) {
   if (contactId === null) {
     return null;
   }
-  const [contact, notes] = await Promise.all([
+  const [contact, notes, groups] = await Promise.all([
     getContact(ownerId, contactId),
     listNotes(ownerId, contactId),
+    listContactGroups(ownerId, contactId),
   ]);
   if (!contact) {
     return null;
@@ -88,7 +112,7 @@ async function loadCard(ownerId: number, contactId: number | null, now: Date) {
           }),
           now,
         );
-  return { contact, notes, keepInTouch };
+  return { contact, notes, groups, keepInTouch };
 }
 
 export default async function HomePage({ searchParams }: PageProps<"/">) {
@@ -97,11 +121,8 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
   const user = await requireUser();
   const screen = readScreenState(await searchParams);
   const now = new Date();
-  const { contacts, total, dueCount, card } = await loadScreen(
-    user.id,
-    screen,
-    now,
-  );
+  const { contacts, total, dueCount, card, groups, groupFilter } =
+    await loadScreen(user.id, screen, now);
   const isCardRequested = screen.contactParam !== null;
 
   let rightPanel: ReactNode;
@@ -111,7 +132,18 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         key="new"
         query={screen.q}
         isDueList={screen.isDueList}
+        groupFilter={groupFilter}
+        groups={groups}
         suggestedName={screen.newName}
+      />
+    );
+  } else if (screen.isGroupsPanel) {
+    rightPanel = (
+      <GroupsPanel
+        groups={groups}
+        query={screen.q}
+        isDueList={screen.isDueList}
+        groupFilter={groupFilter}
       />
     );
   } else if (card && screen.isEdit) {
@@ -120,7 +152,10 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         key={`edit-${card.contact.id}`}
         query={screen.q}
         isDueList={screen.isDueList}
+        groupFilter={groupFilter}
+        groups={groups}
         contact={card.contact}
+        contactGroupIds={card.groups.map((group) => group.id)}
       />
     );
   } else if (card) {
@@ -128,15 +163,21 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
       <ContactCard
         contact={card.contact}
         notes={card.notes}
+        groups={card.groups}
         keepInTouch={card.keepInTouch}
         now={now}
         query={screen.q}
         isDueList={screen.isDueList}
+        groupFilter={groupFilter}
       />
     );
   } else if (isCardRequested) {
     rightPanel = (
-      <ContactMissing query={screen.q} isDueList={screen.isDueList} />
+      <ContactMissing
+        query={screen.q}
+        isDueList={screen.isDueList}
+        groupFilter={groupFilter}
+      />
     );
   } else {
     rightPanel = <StartHint />;
@@ -177,12 +218,15 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
           <div className="flex items-center gap-2 border-b p-3">
             <SearchInput
               query={screen.q}
-              focusOnLoad={!isCardRequested && !screen.isNew}
+              focusOnLoad={
+                !isCardRequested && !screen.isNew && !screen.isGroupsPanel
+              }
             />
             <Link
               href={screenHref({
                 q: screen.q,
                 isDueList: screen.isDueList,
+                groupFilter,
                 isNew: true,
               })}
               scroll={false}
@@ -200,15 +244,28 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
           <ListSwitch
             query={screen.q}
             isDueList={screen.isDueList}
+            groupFilter={groupFilter}
             dueCount={dueCount}
             contactId={card ? card.contact.id : null}
           />
+          <GroupSwitch
+            groups={groups}
+            groupFilter={groupFilter}
+            query={screen.q}
+            isDueList={screen.isDueList}
+            contactId={card ? card.contact.id : null}
+            isGroupsPanel={screen.isGroupsPanel}
+          />
           <ContactList
             contacts={contacts}
-            total={screen.isDueList ? dueCount : total}
+            total={total}
             query={screen.q}
             isSearching={splitSearchQuery(screen.q).length > 0}
             isDueList={screen.isDueList}
+            groupFilter={groupFilter}
+            groupName={
+              groups.find((group) => group.id === groupFilter)?.name ?? null
+            }
             selectedId={card ? card.contact.id : null}
           />
         </section>

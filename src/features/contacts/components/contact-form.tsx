@@ -19,16 +19,22 @@ import {
 } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { createContact, updateContact } from "../actions";
-import type { Contact } from "../data/contacts-repo";
+import type { Contact, GroupFilter } from "../data/contacts-repo";
+import type { Group } from "../data/groups-repo";
 import { formatKeepInTouch } from "../format";
 import { screenHref } from "../screen-url";
 import { KEEP_IN_TOUCH_DAYS } from "../validation";
+import { NewGroupField } from "./new-group-field";
 
 type ContactFormProps = {
   query: string;
   isDueList: boolean;
+  groupFilter: GroupFilter;
+  // All groups of the owner, to tick.
+  groups: Group[];
   // Editing an existing contact, or a new one with an optional suggested name.
   contact?: Contact;
+  contactGroupIds?: number[];
   suggestedName?: string;
 };
 
@@ -71,7 +77,10 @@ function FieldLabel({
 export function ContactForm({
   query,
   isDueList,
+  groupFilter,
+  groups,
   contact,
+  contactGroupIds = [],
   suggestedName = "",
 }: ContactFormProps) {
   const router = useRouter();
@@ -83,6 +92,13 @@ export function ContactForm({
     email: contact?.email ?? "",
     keepInTouchDays: contact?.keepInTouchDays?.toString() ?? "",
     firstNote: "",
+  });
+  // A new contact added while a group is shown starts in that group.
+  const [groupIds, setGroupIds] = useState<number[]>(() => {
+    if (isEdit) {
+      return contactGroupIds;
+    }
+    return typeof groupFilter === "number" ? [groupFilter] : [];
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -116,7 +132,13 @@ export function ContactForm({
       ...values,
       keepInTouchDays:
         values.keepInTouchDays === "" ? null : Number(values.keepInTouchDays),
+      groupIds,
     };
+    // A new contact stays in the shown group only if it belongs there.
+    const isInShownGroup =
+      groupFilter === "none"
+        ? groupIds.length === 0
+        : groupFilter !== null && groupIds.includes(groupFilter);
     startTransition(async () => {
       try {
         const result = isEdit
@@ -130,6 +152,7 @@ export function ContactForm({
               screenHref({
                 q: isEdit ? query : "",
                 isDueList: isEdit && isDueList,
+                groupFilter: isEdit || isInShownGroup ? groupFilter : null,
                 contactId: result.contactId,
               }),
             ),
@@ -253,6 +276,54 @@ export function ContactForm({
         {fieldError("keepInTouchDays")}
       </div>
 
+      <fieldset
+        className="space-y-2"
+        aria-describedby={"groupIds" in errors ? "error-groupIds" : undefined}
+      >
+        <legend className="mb-1.5 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+          Группы
+        </legend>
+        {groups.length > 0 && (
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {groups.map((group) => (
+              <label
+                key={group.id}
+                className="flex min-w-0 items-center gap-2 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={groupIds.includes(group.id)}
+                  onChange={(event) => {
+                    const { checked } = event.target;
+                    setGroupIds((previous) =>
+                      checked
+                        ? [...previous, group.id]
+                        : previous.filter((id) => id !== group.id),
+                    );
+                  }}
+                  className="size-4 shrink-0 accent-primary"
+                />
+                <span className="wrap-anywhere">{group.name}</span>
+              </label>
+            ))}
+          </div>
+        )}
+        <NewGroupField
+          onCreated={(groupId) =>
+            setGroupIds((previous) => [...previous, groupId])
+          }
+        />
+        {errors.groupIds && (
+          <p
+            id="error-groupIds"
+            role="alert"
+            className="text-sm text-destructive"
+          >
+            {errors.groupIds}
+          </p>
+        )}
+      </fieldset>
+
       {!isEdit && (
         <div className="space-y-1.5">
           <FieldLabel htmlFor="contact-firstNote">
@@ -275,6 +346,7 @@ export function ContactForm({
           href={screenHref({
             q: query,
             isDueList,
+            groupFilter,
             contactId: isEdit ? contact.id : undefined,
           })}
           scroll={false}

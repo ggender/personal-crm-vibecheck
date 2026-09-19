@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   calendarDaysBetween,
   deleteContactQuestion,
+  deleteGroupQuestion,
   deleteNoteQuestion,
   formatContactCount,
   formatDayCount,
@@ -123,6 +124,12 @@ describe("deleteContactQuestion", () => {
     expect(deleteContactQuestion("Анна Петрова", 0)).toBe(
       "Удалить контакт «Анна Петрова»?",
     );
+  });
+});
+
+describe("deleteGroupQuestion", () => {
+  it("names the group", () => {
+    expect(deleteGroupQuestion("Работа")).toBe("Удалить группу «Работа»?");
   });
 });
 

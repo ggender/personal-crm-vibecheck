@@ -12,11 +12,17 @@ vi.mock("./data/contacts-repo", () => ({
   deleteContact: vi.fn(),
   markTalked: vi.fn(),
 }));
+vi.mock("./data/groups-repo", () => ({
+  createGroup: vi.fn(),
+  renameGroup: vi.fn(),
+  deleteGroup: vi.fn(),
+}));
 
 const { revalidatePath } = await import("next/cache");
 const { getCurrentUser } = await import("@/features/auth/session");
 const notesRepo = await import("./data/notes-repo");
 const contactsRepo = await import("./data/contacts-repo");
+const groupsRepo = await import("./data/groups-repo");
 const {
   addNote,
   createContact,
@@ -24,6 +30,9 @@ const {
   deleteNote,
   deleteContact,
   markTalked,
+  createGroup,
+  renameGroup,
+  deleteGroup,
 } = await import("./actions");
 
 // The signed-in user; every repository call gets their id as the owner.
@@ -109,9 +118,21 @@ describe("createContact action", () => {
       phone: "",
       email: "",
       keepInTouchDays: null,
+      groupIds: [],
       firstNote: "Пришлёт ссылку",
     });
     expect(revalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("saves the ticked groups", async () => {
+    vi.mocked(contactsRepo.createContact).mockResolvedValue(1000);
+
+    await createContact({ name: "Марк", groupIds: [3, 5] });
+
+    expect(contactsRepo.createContact).toHaveBeenCalledWith(
+      OWNER,
+      expect.objectContaining({ groupIds: [3, 5] }),
+    );
   });
 
   it("returns field errors and saves nothing", async () => {
@@ -152,6 +173,7 @@ describe("updateContact action", () => {
       phone: "",
       email: "",
       keepInTouchDays: null,
+      groupIds: [],
     });
   });
 
@@ -164,6 +186,18 @@ describe("updateContact action", () => {
       OWNER,
       7,
       expect.objectContaining({ keepInTouchDays: 30 }),
+    );
+  });
+
+  it("saves the ticked groups", async () => {
+    vi.mocked(contactsRepo.updateContact).mockResolvedValue(true);
+
+    await updateContact({ id: 7, name: "Марк", groupIds: [2] });
+
+    expect(contactsRepo.updateContact).toHaveBeenCalledWith(
+      OWNER,
+      7,
+      expect.objectContaining({ groupIds: [2] }),
     );
   });
 
@@ -301,6 +335,137 @@ describe("markTalked action", () => {
   });
 });
 
+describe("createGroup action", () => {
+  it("creates the group and refreshes the page", async () => {
+    vi.mocked(groupsRepo.createGroup).mockResolvedValue({
+      id: 4,
+      name: "Работа",
+    });
+
+    expect(await createGroup({ name: "  Работа " })).toEqual({
+      ok: true,
+      groupId: 4,
+    });
+    expect(groupsRepo.createGroup).toHaveBeenCalledWith(OWNER, "Работа");
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("refuses an empty name without touching the database", async () => {
+    expect(await createGroup({ name: "  " })).toEqual({
+      ok: false,
+      error: "Напиши название группы",
+      canRetry: false,
+    });
+    expect(groupsRepo.createGroup).not.toHaveBeenCalled();
+  });
+
+  it("says when the owner already has a group with this name", async () => {
+    vi.mocked(groupsRepo.createGroup).mockResolvedValue(null);
+
+    expect(await createGroup({ name: " работа" })).toEqual({
+      ok: false,
+      error: "Группа «работа» уже есть",
+      canRetry: false,
+    });
+  });
+
+  it("turns an unexpected failure into a retryable message", async () => {
+    vi.mocked(groupsRepo.createGroup).mockRejectedValue(new Error("busy"));
+
+    expect(await createGroup({ name: "Работа" })).toEqual({
+      ok: false,
+      error: "Не удалось создать группу",
+      canRetry: true,
+    });
+  });
+});
+
+describe("renameGroup action", () => {
+  it("renames the group and refreshes the page", async () => {
+    vi.mocked(groupsRepo.renameGroup).mockResolvedValue("renamed");
+
+    expect(await renameGroup({ groupId: 4, name: " Друзья " })).toEqual({
+      ok: true,
+    });
+    expect(groupsRepo.renameGroup).toHaveBeenCalledWith(OWNER, 4, "Друзья");
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("refuses an empty name without touching the database", async () => {
+    expect(await renameGroup({ groupId: 4, name: "" })).toEqual({
+      ok: false,
+      error: "Напиши название группы",
+      canRetry: false,
+    });
+    expect(groupsRepo.renameGroup).not.toHaveBeenCalled();
+  });
+
+  it("says when another group has this name", async () => {
+    vi.mocked(groupsRepo.renameGroup).mockResolvedValue("name_taken");
+
+    expect(await renameGroup({ groupId: 4, name: "Друзья" })).toEqual({
+      ok: false,
+      error: "Группа «Друзья» уже есть",
+      canRetry: false,
+    });
+  });
+
+  it("says when the group is gone", async () => {
+    vi.mocked(groupsRepo.renameGroup).mockResolvedValue("missing");
+
+    expect(await renameGroup({ groupId: 4, name: "Друзья" })).toEqual({
+      ok: false,
+      error: "Такой группы больше нет",
+      canRetry: false,
+    });
+  });
+
+  it("turns an unexpected failure into a retryable message", async () => {
+    vi.mocked(groupsRepo.renameGroup).mockRejectedValue(new Error("busy"));
+
+    expect(await renameGroup({ groupId: 4, name: "Друзья" })).toEqual({
+      ok: false,
+      error: "Не удалось переименовать группу",
+      canRetry: true,
+    });
+  });
+});
+
+describe("deleteGroup action", () => {
+  it("deletes the group and refreshes the page", async () => {
+    vi.mocked(groupsRepo.deleteGroup).mockResolvedValue(true);
+
+    expect(await deleteGroup({ groupId: 4 })).toEqual({ ok: true });
+    expect(groupsRepo.deleteGroup).toHaveBeenCalledWith(OWNER, 4);
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("says when the group is already gone", async () => {
+    vi.mocked(groupsRepo.deleteGroup).mockResolvedValue(false);
+
+    expect(await deleteGroup({ groupId: 4 })).toEqual({
+      ok: false,
+      error: "Такой группы больше нет",
+      canRetry: false,
+    });
+  });
+
+  it("refuses a broken id without touching the database", async () => {
+    expect(await deleteGroup({ groupId: 0 })).toMatchObject({ ok: false });
+    expect(groupsRepo.deleteGroup).not.toHaveBeenCalled();
+  });
+
+  it("turns an unexpected failure into a retryable message", async () => {
+    vi.mocked(groupsRepo.deleteGroup).mockRejectedValue(new Error("locked"));
+
+    expect(await deleteGroup({ groupId: 4 })).toEqual({
+      ok: false,
+      error: "Не удалось удалить группу",
+      canRetry: true,
+    });
+  });
+});
+
 describe("without a session", () => {
   const signedOut = {
     ok: false,
@@ -319,6 +484,11 @@ describe("without a session", () => {
     expect(await deleteNote({ noteId: 5 })).toEqual(signedOut);
     expect(await deleteContact({ contactId: 9 })).toEqual(signedOut);
     expect(await markTalked({ contactId: 9 })).toEqual(signedOut);
+    expect(await createGroup({ name: "Работа" })).toEqual(signedOut);
+    expect(await renameGroup({ groupId: 4, name: "Работа" })).toEqual(
+      signedOut,
+    );
+    expect(await deleteGroup({ groupId: 4 })).toEqual(signedOut);
 
     for (const repoFunction of [
       notesRepo.addNote,
@@ -327,6 +497,9 @@ describe("without a session", () => {
       contactsRepo.updateContact,
       contactsRepo.deleteContact,
       contactsRepo.markTalked,
+      groupsRepo.createGroup,
+      groupsRepo.renameGroup,
+      groupsRepo.deleteGroup,
     ]) {
       expect(repoFunction).not.toHaveBeenCalled();
     }
@@ -439,5 +612,67 @@ describe("action logs", () => {
     for (const personal of [...Object.values(contact), note]) {
       expect(output).not.toContain(personal);
     }
+  });
+
+  it("carry group ids and lengths, never group names", async () => {
+    vi.stubEnv("LOG_LEVEL", "debug");
+    const lines: string[] = [];
+    for (const method of ["log", "warn", "error"] as const) {
+      vi.spyOn(console, method).mockImplementation((line: unknown) => {
+        lines.push(String(line));
+      });
+    }
+    const name = "Бывшие коллеги из Ромашки";
+    const queryError = new Error(
+      `Failed query: insert into "groups" params: ${name}`,
+      { cause: new Error("database is locked") },
+    );
+
+    vi.mocked(groupsRepo.createGroup)
+      .mockResolvedValueOnce({ id: 4, name })
+      .mockResolvedValueOnce(null)
+      .mockRejectedValueOnce(queryError);
+    await createGroup({ name });
+    await createGroup({ name });
+    await createGroup({ name });
+    await createGroup({ name: name.repeat(10) });
+
+    vi.mocked(groupsRepo.renameGroup)
+      .mockResolvedValueOnce("renamed")
+      .mockResolvedValueOnce("name_taken")
+      .mockResolvedValueOnce("missing")
+      .mockRejectedValueOnce(queryError);
+    for (let i = 0; i < 4; i++) {
+      await renameGroup({ groupId: 4, name });
+    }
+
+    vi.mocked(groupsRepo.deleteGroup)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockRejectedValueOnce(queryError);
+    for (let i = 0; i < 3; i++) {
+      await deleteGroup({ groupId: 4 });
+    }
+
+    vi.mocked(contactsRepo.createContact).mockResolvedValueOnce(1000);
+    await createContact({ name: "Марк", groupIds: [4, 5] });
+
+    const output = lines.join("\n");
+    for (const event of [
+      "group.created",
+      "group.name_taken",
+      "group.create_failed",
+      "group.rejected",
+      "group.renamed",
+      "group.missing",
+      "group.rename_failed",
+      "group.deleted",
+      "group.delete_failed",
+    ]) {
+      expect(output).toContain(event);
+    }
+    expect(output).toContain("groupCount=2");
+    expect(output).not.toContain(name);
+    expect(output).not.toContain("Ромашк");
   });
 });

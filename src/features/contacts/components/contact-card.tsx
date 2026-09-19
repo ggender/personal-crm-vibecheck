@@ -2,7 +2,8 @@ import { Pencil } from "lucide-react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
-import type { Contact } from "../data/contacts-repo";
+import type { Contact, GroupFilter } from "../data/contacts-repo";
+import type { Group } from "../data/groups-repo";
 import type { Note } from "../data/notes-repo";
 import {
   deleteContactQuestion,
@@ -20,11 +21,13 @@ import { NotesFeed } from "./notes-feed";
 type ContactCardProps = {
   contact: Contact;
   notes: Note[];
+  groups: Group[];
   // null when nobody keeps in touch with this contact on a rhythm.
   keepInTouch: KeepInTouchState | null;
   now: Date;
   query: string;
   isDueList: boolean;
+  groupFilter: GroupFilter;
 };
 
 function Detail({ label, children }: { label: string; children: ReactNode }) {
@@ -44,10 +47,12 @@ function NotSet() {
 export function ContactCard({
   contact,
   notes,
+  groups,
   keepInTouch,
   now,
   query,
   isDueList,
+  groupFilter,
 }: ContactCardProps) {
   return (
     <article
@@ -84,6 +89,13 @@ export function ContactCard({
       <dl className="space-y-2 border-t pt-4 text-sm">
         <Detail label="Откуда знакомы">
           {contact.metContext || <NotSet />}
+        </Detail>
+        <Detail label="Группы">
+          {groups.length > 0 ? (
+            groups.map((group) => group.name).join(", ")
+          ) : (
+            <span className="text-muted-foreground">без группы</span>
+          )}
         </Detail>
         <Detail label="Телефон">
           {contact.phone ? (
@@ -124,6 +136,7 @@ export function ContactCard({
           href={screenHref({
             q: query,
             isDueList,
+            groupFilter,
             contactId: contact.id,
             isEdit: true,
           })}
@@ -137,6 +150,7 @@ export function ContactCard({
           contactId={contact.id}
           query={query}
           isDueList={isDueList}
+          groupFilter={groupFilter}
           question={deleteContactQuestion(contact.name, notes.length)}
         />
       </div>

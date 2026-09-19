@@ -185,6 +185,24 @@ export const NOTE_TEMPLATES: readonly Gendered[] = [
   "Ищет дизайнера в команду, можно порекомендовать Олю",
 ];
 
+// The groups of the demo account. A contact joins every group whose rule
+// matches where they met, so some are in two groups at once.
+export const SEED_GROUPS: readonly { name: string; metContext: RegExp }[] = [
+  {
+    name: "Работа",
+    metContext:
+      /коллег|Клиент|Подрядчик|Наставни|Собеседование|Стажировка|Коворкинг|Нетворкинг|Конференция|Митап|Хакатон/,
+  },
+  { name: "Конференции", metContext: /Конференция|Митап|Хакатон/ },
+  { name: "Соседи", metContext: /Сосед/ },
+  {
+    name: "Учёба",
+    metContext: /Одноклассни|Однокурсни|Университет|Школа|Курс/,
+  },
+  { name: "Спорт", metContext: /бассейн|Йога|Спортзал|Футбол|Бег|Шахмат/ },
+  { name: "Друзья", metContext: /друг|друзей/i },
+];
+
 export type FeaturedContact = {
   first: string;
   last: string;
@@ -193,6 +211,8 @@ export type FeaturedContact = {
   phone?: string;
   email?: string;
   keepInTouchDays?: number;
+  // Names from SEED_GROUPS; people from the sketches get theirs by hand.
+  groups?: readonly string[];
   // Days before "now", newest last.
   notes?: readonly { daysAgo: number; body: string }[];
 };
@@ -207,6 +227,7 @@ export const FEATURED_CONTACTS: readonly FeaturedContact[] = [
     phone: "+7 916 555-01-42",
     email: "anna.petrova@example.com",
     keepInTouchDays: 30,
+    groups: ["Работа", "Конференции"],
     notes: [
       {
         daysAgo: 123,
@@ -223,6 +244,7 @@ export const FEATURED_CONTACTS: readonly FeaturedContact[] = [
     last: "Петрова",
     gender: "f",
     metContext: "Соседка по подъезду",
+    groups: ["Соседи"],
   },
   {
     first: "Анна",
@@ -240,6 +262,7 @@ export const FEATURED_CONTACTS: readonly FeaturedContact[] = [
     last: "Ковалёв",
     gender: "m",
     metContext: "Бывший коллега",
+    groups: ["Работа"],
     notes: [{ daysAgo: 0, body: "Ищет дизайнера, обещал скинуть вакансию" }],
   },
   {
@@ -248,6 +271,7 @@ export const FEATURED_CONTACTS: readonly FeaturedContact[] = [
     gender: "f",
     metContext: "Соседка по даче",
     keepInTouchDays: 90,
+    groups: ["Соседи"],
     notes: [{ daysAgo: 1, body: "Вернуть дрель до конца месяца" }],
   },
   {
@@ -263,6 +287,7 @@ export const FEATURED_CONTACTS: readonly FeaturedContact[] = [
     gender: "f",
     metContext: "Через Бориса",
     keepInTouchDays: 14,
+    groups: ["Друзья"],
     notes: [{ daysAgo: 14, body: "Юрист, можно спросить про договор аренды" }],
   },
   { first: "Егор", last: "Новиков", gender: "m", metContext: "Спортзал" },

@@ -16,7 +16,7 @@
 
 - Код на английском: идентификаторы, комментарии, сообщения логов, коммиты. Тексты интерфейса и сид — на русском.
 - Не повторяйся: у каждой логики один дом. Нормализация имени — только `normalize-name.ts`. Даты и склонения — только `contacts/format.ts`. Лимиты и проверки ввода — только `validation.ts` своей фичи. Настройка Better Auth — только `auth/data/auth.ts`, письмо со ссылкой — только `auth/login-email.ts`.
-- Одно имя везде: contact, note, metContext, ContactList, ContactCard, NotesFeed (см. словарь в плане); keepInTouchDays, talkedAt, isDueList (словарь в specs/04-keep-in-touch.md); user, session, ownerId (словарь в specs/05-вход-и-пользователи.md).
+- Одно имя везде: contact, note, metContext, ContactList, ContactCard, NotesFeed (см. словарь в плане); keepInTouchDays, talkedAt, isDueList (словарь в specs/04-keep-in-touch.md); user, session, ownerId (словарь в specs/05-вход-и-пользователи.md); group, groupIds, groupFilter, GroupSwitch, GroupsPanel (словарь в specs/06-группы.md).
 - Слои раздельно: компоненты не ходят в базу; клиент базы и схему импортируют только `features/*/data/*` и скрипты в `src/db/`. Все функции репозиториев — `async`.
 - Чужое не видно: каждая функция репозиториев принимает `ownerId` первым параметром и фильтрует по нему; страница и каждое действие сначала узнают пользователя через `features/auth/session.ts`. Чужой контакт выглядит как несуществующий.
 - Фича самодостаточна: всё про контакты и заметки — в `src/features/contacts/`, про вход — в `src/features/auth/`.

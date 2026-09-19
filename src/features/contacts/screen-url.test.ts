@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readScreenState, screenHref } from "./screen-url";
+import { knownGroupFilter, readScreenState, screenHref } from "./screen-url";
 
 describe("readScreenState", () => {
   it("reads an empty address as the start screen", () => {
@@ -8,9 +8,11 @@ describe("readScreenState", () => {
       contactParam: null,
       contactId: null,
       isDueList: false,
+      groupFilter: null,
       isNew: false,
       isEdit: false,
       newName: "",
+      isGroupsPanel: false,
     });
   });
 
@@ -90,5 +92,69 @@ describe("screenHref", () => {
       contactId: 5,
       isDueList: true,
     });
+  });
+});
+
+describe("groups in the address", () => {
+  it("reads one group or the contacts without a group", () => {
+    expect(readScreenState({ group: "3" })).toMatchObject({ groupFilter: 3 });
+    expect(readScreenState({ group: "none" })).toMatchObject({
+      groupFilter: "none",
+    });
+    for (const raw of ["", "abc", "0", "-1", "1.5", "99999999999999999999"]) {
+      expect(readScreenState({ group: raw })).toMatchObject({
+        groupFilter: null,
+      });
+    }
+  });
+
+  it("reads the groups panel", () => {
+    expect(readScreenState({ groups: "1" })).toMatchObject({
+      isGroupsPanel: true,
+    });
+    expect(readScreenState({ groups: "yes" })).toMatchObject({
+      isGroupsPanel: false,
+    });
+  });
+
+  it("keeps the group next to the search and the «Пора написать» list", () => {
+    expect(screenHref({ groupFilter: 3 })).toBe("/?group=3");
+    expect(screenHref({ groupFilter: "none" })).toBe("/?group=none");
+    expect(screenHref({ groupFilter: null })).toBe("/");
+    expect(
+      screenHref({ q: "анн", isDueList: true, groupFilter: 3, contactId: 5 }),
+    ).toBe("/?q=%D0%B0%D0%BD%D0%BD&due=1&group=3&contact=5");
+    expect(screenHref({ groupFilter: 3, isNew: true })).toBe("/?group=3&new=1");
+    expect(screenHref({ groupFilter: 3, isGroupsPanel: true })).toBe(
+      "/?group=3&groups=1",
+    );
+  });
+
+  it("round-trips through readScreenState", () => {
+    for (const groupFilter of [3, "none"] as const) {
+      const params = Object.fromEntries(
+        new URL(screenHref({ groupFilter, isGroupsPanel: true }), "http://x")
+          .searchParams,
+      );
+      expect(readScreenState(params)).toMatchObject({
+        groupFilter,
+        isGroupsPanel: true,
+      });
+    }
+  });
+});
+
+describe("knownGroupFilter", () => {
+  const groups = [{ id: 3 }, { id: 8 }];
+
+  it("keeps a group that exists and the contacts without a group", () => {
+    expect(knownGroupFilter(8, groups)).toBe(8);
+    expect(knownGroupFilter("none", groups)).toBe("none");
+    expect(knownGroupFilter(null, groups)).toBeNull();
+  });
+
+  it("shows everyone for a group that is gone or someone else's", () => {
+    expect(knownGroupFilter(5, groups)).toBeNull();
+    expect(knownGroupFilter(3, [])).toBeNull();
   });
 });

@@ -12,6 +12,7 @@ import {
   searchContacts,
   updateContact,
 } from "./contacts-repo";
+import { createGroup, listContactGroups } from "./groups-repo";
 import { addNote, listNotes } from "./notes-repo";
 
 let db: TestDb;
@@ -38,7 +39,9 @@ async function nameSearchOf(id: number): Promise<string | undefined> {
 }
 
 async function names(query: string): Promise<string[]> {
-  return (await searchContacts(owner, query, db)).map((contact) => contact.name);
+  return (await searchContacts(owner, query, null, db)).map(
+    (contact) => contact.name,
+  );
 }
 
 describe("createContact", () => {
@@ -118,7 +121,7 @@ describe("createContact", () => {
     await expect(
       createContact(owner, { name: "Анна", firstNote: "Заметка" }, db),
     ).rejects.toThrow();
-    expect(await countContacts(owner, db)).toBe(0);
+    expect(await countContacts(owner, null, db)).toBe(0);
   });
 });
 
@@ -190,7 +193,7 @@ describe("searchContacts", () => {
   });
 
   it("returns only what the list needs", async () => {
-    const [first] = await searchContacts(owner, "петрова", db);
+    const [first] = await searchContacts(owner, "петрова", null, db);
     expect(Object.keys(first).sort()).toEqual(["id", "metContext", "name"]);
   });
 });
@@ -287,7 +290,7 @@ describe("listKeepInTouch", () => {
     vi.setSystemTime(new Date("2026-09-12T10:00:00Z"));
     await markTalked(owner, boris, db);
 
-    expect(await listKeepInTouch(owner, "", db)).toEqual([
+    expect(await listKeepInTouch(owner, "", null, db)).toEqual([
       {
         id: anna,
         name: "Анна Петрова",
@@ -316,7 +319,9 @@ describe("listKeepInTouch", () => {
     await createContact(owner, { name: "Анна Жукова" }, db);
 
     const found = async (query: string) =>
-      (await listKeepInTouch(owner, query, db)).map((contact) => contact.name);
+      (await listKeepInTouch(owner, query, null, db)).map(
+        (contact) => contact.name,
+      );
 
     expect(await found("анн")).toEqual(["Анна Петрова", "Иван Аннин"]);
     expect(await found("семен")).toEqual(["Семён Королёв"]);
@@ -345,10 +350,10 @@ describe("deleteContact", () => {
 
 describe("countContacts", () => {
   it("counts all contacts of the owner", async () => {
-    expect(await countContacts(owner, db)).toBe(0);
+    expect(await countContacts(owner, null, db)).toBe(0);
     await createContact(owner, { name: "Анна" }, db);
     await createContact(owner, { name: "Борис" }, db);
-    expect(await countContacts(owner, db)).toBe(2);
+    expect(await countContacts(owner, null, db)).toBe(2);
   });
 });
 
@@ -368,9 +373,11 @@ describe("another owner's contacts", () => {
     expect(await names("")).toEqual(["Анна Своя"]);
     expect(await names("чужая")).toEqual([]);
     expect(
-      (await listKeepInTouch(owner, "", db)).map((contact) => contact.name),
+      (await listKeepInTouch(owner, "", null, db)).map(
+        (contact) => contact.name,
+      ),
     ).toEqual(["Анна Своя"]);
-    expect(await countContacts(owner, db)).toBe(1);
+    expect(await countContacts(owner, null, db)).toBe(1);
   });
 
   it("cannot be opened", async () => {
@@ -392,5 +399,181 @@ describe("another owner's contacts", () => {
       talkedAt: null,
     });
     expect(await listNotes(stranger, theirs, db)).toHaveLength(1);
+  });
+});
+
+describe("groups of a contact", () => {
+  let work: number;
+  let friends: number;
+
+  beforeEach(async () => {
+    work = (await createGroup(owner, "Работа", db))!.id;
+    friends = (await createGroup(owner, "Друзья", db))!.id;
+  });
+
+  async function groupsOf(id: number): Promise<string[]> {
+    return (await listContactGroups(owner, id, db)).map((group) => group.name);
+  }
+
+  it("are saved together with a new contact", async () => {
+    const id = await createContact(
+      owner,
+      { name: "Анна", groupIds: [work, friends, work] },
+      db,
+    );
+
+    expect(await groupsOf(id)).toEqual(["Друзья", "Работа"]);
+  });
+
+  it("skip a group that is gone or someone else's", async () => {
+    const theirs = (await createGroup(stranger, "Чужая", db))!.id;
+
+    const id = await createContact(
+      owner,
+      { name: "Анна", groupIds: [work, theirs, 12345] },
+      db,
+    );
+
+    expect(await groupsOf(id)).toEqual(["Работа"]);
+  });
+
+  it("are replaced when the contact is edited", async () => {
+    const id = await createContact(
+      owner,
+      { name: "Анна", groupIds: [work] },
+      db,
+    );
+
+    await updateContact(owner, id, { name: "Анна", groupIds: [friends] }, db);
+    expect(await groupsOf(id)).toEqual(["Друзья"]);
+
+    await updateContact(owner, id, { name: "Анна", groupIds: [] }, db);
+    expect(await groupsOf(id)).toEqual([]);
+  });
+
+  it("stay when an edit does not mention them", async () => {
+    const id = await createContact(
+      owner,
+      { name: "Анна", groupIds: [work] },
+      db,
+    );
+
+    await updateContact(owner, id, { name: "Анна Петрова" }, db);
+
+    expect(await groupsOf(id)).toEqual(["Работа"]);
+  });
+
+  it("of someone else's contact cannot be changed", async () => {
+    const theirGroup = (await createGroup(stranger, "Чужая", db))!.id;
+    const theirs = await createContact(
+      stranger,
+      { name: "Анна Чужая", groupIds: [theirGroup] },
+      db,
+    );
+
+    expect(
+      await updateContact(
+        owner,
+        theirs,
+        { name: "Взлом", groupIds: [work] },
+        db,
+      ),
+    ).toBe(false);
+
+    expect(
+      (await listContactGroups(stranger, theirs, db)).map((group) => group.id),
+    ).toEqual([theirGroup]);
+  });
+
+  it("are not saved when the contact fails to save", async () => {
+    await db.$client.exec(`
+      CREATE FUNCTION fail_notes() RETURNS trigger LANGUAGE plpgsql
+        AS $$ BEGIN RAISE EXCEPTION 'boom'; END $$;
+      CREATE TRIGGER fail_notes BEFORE INSERT ON notes
+        FOR EACH ROW EXECUTE FUNCTION fail_notes();
+    `);
+
+    await expect(
+      createContact(
+        owner,
+        { name: "Анна", groupIds: [work], firstNote: "Заметка" },
+        db,
+      ),
+    ).rejects.toThrow();
+    expect(await countContacts(owner, null, db)).toBe(0);
+  });
+});
+
+describe("the list of one group", () => {
+  let work: number;
+  let friends: number;
+
+  beforeEach(async () => {
+    work = (await createGroup(owner, "Работа", db))!.id;
+    friends = (await createGroup(owner, "Друзья", db))!.id;
+    await createContact(
+      owner,
+      { name: "Анна Петрова", groupIds: [work, friends], keepInTouchDays: 30 },
+      db,
+    );
+    await createContact(
+      owner,
+      { name: "Борис Ковалёв", groupIds: [work], keepInTouchDays: 14 },
+      db,
+    );
+    await createContact(
+      owner,
+      { name: "Анна Жукова", groupIds: [friends] },
+      db,
+    );
+    await createContact(
+      owner,
+      { name: "Вера Соколова", keepInTouchDays: 90 },
+      db,
+    );
+    await createContact(owner, { name: "Анна Своя" }, db);
+  });
+
+  const inGroup = async (group: number | "none", query = "") =>
+    (await searchContacts(owner, query, group, db)).map(
+      (contact) => contact.name,
+    );
+
+  it("shows only the contacts in the group", async () => {
+    expect(await inGroup(work)).toEqual(["Анна Петрова", "Борис Ковалёв"]);
+    expect(await inGroup(friends)).toEqual(["Анна Жукова", "Анна Петрова"]);
+  });
+
+  it("shows the contacts without any group", async () => {
+    expect(await inGroup("none")).toEqual(["Анна Своя", "Вера Соколова"]);
+  });
+
+  it("works together with the search", async () => {
+    expect(await inGroup(work, "анн")).toEqual(["Анна Петрова"]);
+    expect(await inGroup("none", "анн")).toEqual(["Анна Своя"]);
+  });
+
+  it("works together with the keep-in-touch list", async () => {
+    const keepInTouch = async (group: number | "none") =>
+      (await listKeepInTouch(owner, "", group, db)).map(
+        (contact) => contact.name,
+      );
+
+    expect(await keepInTouch(work)).toEqual(["Анна Петрова", "Борис Ковалёв"]);
+    expect(await keepInTouch(friends)).toEqual(["Анна Петрова"]);
+    expect(await keepInTouch("none")).toEqual(["Вера Соколова"]);
+  });
+
+  it("is counted", async () => {
+    expect(await countContacts(owner, null, db)).toBe(5);
+    expect(await countContacts(owner, work, db)).toBe(2);
+    expect(await countContacts(owner, "none", db)).toBe(2);
+  });
+
+  it("has none of another owner's contacts", async () => {
+    await createContact(stranger, { name: "Анна Чужая" }, db);
+
+    expect(await inGroup("none")).toEqual(["Анна Своя", "Вера Соколова"]);
+    expect(await countContacts(owner, "none", db)).toBe(2);
   });
 });

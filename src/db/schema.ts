@@ -3,8 +3,10 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // users, sessions, accounts and verifications belong to Better Auth: their
@@ -162,5 +164,43 @@ export const notes = pgTable(
       table.contactId,
       table.createdAt,
     ),
+  ],
+);
+
+// Groups a person sorts their contacts into; a contact can be in several.
+export const groups = pgTable(
+  "groups",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    ownerId: integer("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // Always normalizeName(name): one owner cannot have both «Работа» and
+    // «работа». Set by the groups repository.
+    nameSearch: text("name_search").notNull(),
+  },
+  (table) => [
+    uniqueIndex("groups_owner_id_name_search_idx").on(
+      table.ownerId,
+      table.nameSearch,
+    ),
+  ],
+);
+
+// Which contact is in which group. Deleting either side removes the link.
+export const contactGroups = pgTable(
+  "contact_groups",
+  {
+    contactId: integer("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.contactId, table.groupId] }),
+    index("contact_groups_group_id_idx").on(table.groupId),
   ],
 );

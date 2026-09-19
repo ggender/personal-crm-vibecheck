@@ -7,7 +7,7 @@ import {
 import { normalizeName } from "@/features/contacts/normalize-name";
 import { KEEP_IN_TOUCH_DAYS } from "@/features/contacts/validation";
 import { eq } from "drizzle-orm";
-import { contacts, notes, users } from "./schema";
+import { contactGroups, contacts, groups, notes, users } from "./schema";
 import { DEMO_EMAIL, SEED_CONTACT_COUNT, seedDatabase } from "./seed-database";
 import { createTestDb, createTestUser, type TestDb } from "./test-db";
 
@@ -18,6 +18,11 @@ async function allRows(db: TestDb) {
   return {
     contacts: await db.select().from(contacts).orderBy(contacts.id),
     notes: await db.select().from(notes).orderBy(notes.id),
+    groups: await db.select().from(groups).orderBy(groups.id),
+    contactGroups: await db
+      .select()
+      .from(contactGroups)
+      .orderBy(contactGroups.contactId, contactGroups.groupId),
   };
 }
 
@@ -48,7 +53,7 @@ describe("seedDatabase", () => {
     expect(await allRows(db)).toEqual(before);
   });
 
-  it("gives every contact to the demo account", async () => {
+  it("gives every contact and group to the demo account", async () => {
     const db = await createTestDb();
 
     await seedDatabase(db, now);
@@ -59,10 +64,11 @@ describe("seedDatabase", () => {
       .where(eq(users.email, DEMO_EMAIL));
     expect(DEMO_EMAIL).toBe("demo@example.com");
     expect(demo).toEqual([{ id: expect.any(Number), emailVerified: true }]);
-    const owners = new Set(
-      (await allRows(db)).contacts.map((contact) => contact.ownerId),
-    );
+    const rows = await allRows(db);
+    const owners = new Set(rows.contacts.map((contact) => contact.ownerId));
     expect([...owners]).toEqual([demo[0].id]);
+    const groupOwners = new Set(rows.groups.map((group) => group.ownerId));
+    expect([...groupOwners]).toEqual([demo[0].id]);
   });
 
   it("uses the demo account the migration already made", async () => {
@@ -85,6 +91,7 @@ describe("seedDatabase", () => {
     const result = await seedDatabase(db, now);
 
     expect(result).toEqual({ status: "skipped", contacts: 1 });
+    expect(await db.select().from(groups)).toEqual([]);
   });
 
   it("seeds the demo account even when other accounts have contacts", async () => {
@@ -236,6 +243,72 @@ describe("seed content", () => {
     );
     expect(due.length).toBeGreaterThanOrEqual(5);
     expect(due.length).toBeLessThan(withRhythm.length);
+  });
+
+  it("sorts about a third of contacts into groups by where they met", () => {
+    const groupNames = new Map(
+      rows.groups.map((group) => [group.id, group.name]),
+    );
+    expect([...groupNames.values()].sort()).toEqual([
+      "Друзья",
+      "Конференции",
+      "Работа",
+      "Соседи",
+      "Спорт",
+      "Учёба",
+    ]);
+
+    const groupsPerContact = new Map<number, string[]>();
+    for (const link of rows.contactGroups) {
+      groupsPerContact.set(link.contactId, [
+        ...(groupsPerContact.get(link.contactId) ?? []),
+        groupNames.get(link.groupId)!,
+      ]);
+    }
+    expect(groupsPerContact.size / 999).toBeGreaterThan(0.2);
+    expect(groupsPerContact.size / 999).toBeLessThan(0.4);
+    // Some people are in two groups at once.
+    expect(
+      [...groupsPerContact.values()].some((names) => names.length >= 2),
+    ).toBe(true);
+    // Every group has people.
+    expect(new Set(rows.contactGroups.map((link) => link.groupId)).size).toBe(
+      6,
+    );
+
+    const metContextById = new Map(
+      rows.contacts.map((contact) => [contact.id, contact.metContext]),
+    );
+    for (const [contactId, names] of groupsPerContact) {
+      if (names.includes("Соседи")) {
+        expect(metContextById.get(contactId)).toMatch(/Сосед/);
+      }
+    }
+  });
+
+  it("gives the people from the sketches their groups", () => {
+    const groupNames = new Map(
+      rows.groups.map((group) => [group.id, group.name]),
+    );
+    const groupsOf = (person: string) => {
+      const contact = rows.contacts.find(
+        (row) => `${row.name} · ${row.metContext}` === person,
+      );
+      return rows.contactGroups
+        .filter((link) => link.contactId === contact?.id)
+        .map((link) => groupNames.get(link.groupId))
+        .sort();
+    };
+
+    expect(groupsOf("Анна Петрова · Конференция ProductCamp, 2025")).toEqual([
+      "Конференции",
+      "Работа",
+    ]);
+    expect(groupsOf("Анна Петрова · Соседка по подъезду")).toEqual(["Соседи"]);
+    expect(groupsOf("Борис Ковалёв · Бывший коллега")).toEqual(["Работа"]);
+    expect(groupsOf("Вера Соколова · Соседка по даче")).toEqual(["Соседи"]);
+    expect(groupsOf("Дарья Лебедева · Через Бориса")).toEqual(["Друзья"]);
+    expect(groupsOf("Анна Жукова · Курс по аналитике")).toEqual([]);
   });
 
   it("gives the people from the sketches their rhythms", () => {

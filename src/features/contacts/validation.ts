@@ -8,6 +8,7 @@ export const LIMITS = {
   phone: 50,
   email: 200,
   note: 5000,
+  groupName: 50,
 } as const;
 
 // How often to keep in touch, in days: the only choices the form offers.
@@ -17,6 +18,11 @@ const contactId = z
   .number({ error: "Не удалось понять, какой это контакт" })
   .int({ error: "Не удалось понять, какой это контакт" })
   .positive({ error: "Не удалось понять, какой это контакт" });
+
+const groupId = z
+  .number({ error: "Не удалось понять, какая это группа" })
+  .int({ error: "Не удалось понять, какая это группа" })
+  .positive({ error: "Не удалось понять, какая это группа" });
 
 export const noteBody = z
   .string({ error: "Напиши текст заметки" })
@@ -38,6 +44,20 @@ export const deleteNoteInput = z.object({
 export const deleteContactInput = z.object({ contactId });
 
 export const markTalkedInput = z.object({ contactId });
+
+const groupName = z
+  .string({ error: "Напиши название группы" })
+  .trim()
+  .min(1, { error: "Напиши название группы" })
+  .max(LIMITS.groupName, {
+    error: `Название группы длиннее ${LIMITS.groupName} знаков — сократи его`,
+  });
+
+export const createGroupInput = z.object({ name: groupName });
+
+export const renameGroupInput = z.object({ groupId, name: groupName });
+
+export const deleteGroupInput = z.object({ groupId });
 
 function optionalText(limit: number, label: string) {
   return z
@@ -68,6 +88,10 @@ const contactFields = {
     })
     .nullable()
     .default(null),
+  // The groups ticked in the form; none when not given.
+  groupIds: z
+    .array(groupId, { error: "Не удалось понять, какая это группа" })
+    .default([]),
 };
 
 export const createContactInput = z.object({

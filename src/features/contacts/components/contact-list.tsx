@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ContactListItem } from "../data/contacts-repo";
+import type { ContactListItem, GroupFilter } from "../data/contacts-repo";
 import {
   formatContactCount,
   formatDayCount,
@@ -8,8 +8,10 @@ import {
 } from "../format";
 import { screenHref } from "../screen-url";
 import {
+  EmptyGroup,
   NoContactsYet,
   NoDueSearchResults,
+  NoGroupSearchResults,
   NoOneDue,
   NoSearchResults,
 } from "./empty-states";
@@ -22,6 +24,9 @@ type ContactListProps = {
   query: string;
   isSearching: boolean;
   isDueList: boolean;
+  groupFilter: GroupFilter;
+  // The name of the shown group; null for everyone or no group.
+  groupName: string | null;
   selectedId: number | null;
 };
 
@@ -29,9 +34,21 @@ function EmptyList({
   query,
   isSearching,
   isDueList,
-}: Pick<ContactListProps, "query" | "isSearching" | "isDueList">) {
+  groupFilter,
+  groupName,
+}: Pick<
+  ContactListProps,
+  "query" | "isSearching" | "isDueList" | "groupFilter" | "groupName"
+>) {
   if (isDueList) {
     return isSearching ? <NoDueSearchResults query={query} /> : <NoOneDue />;
+  }
+  if (groupFilter !== null) {
+    return isSearching ? (
+      <NoGroupSearchResults query={query} groupName={groupName} />
+    ) : (
+      <EmptyGroup groupName={groupName} />
+    );
   }
   return isSearching ? <NoSearchResults query={query} /> : <NoContactsYet />;
 }
@@ -42,6 +59,8 @@ export function ContactList({
   query,
   isSearching,
   isDueList,
+  groupFilter,
+  groupName,
   selectedId,
 }: ContactListProps) {
   return (
@@ -59,6 +78,8 @@ export function ContactList({
           query={query}
           isSearching={isSearching}
           isDueList={isDueList}
+          groupFilter={groupFilter}
+          groupName={groupName}
         />
       ) : (
         <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -70,6 +91,7 @@ export function ContactList({
                   href={screenHref({
                     q: query,
                     isDueList,
+                    groupFilter,
                     contactId: contact.id,
                   })}
                   scroll={false}

@@ -340,3 +340,206 @@ test.describe("keep in touch (specs/04-keep-in-touch.md)", () => {
     await expect(dueLink(page)).not.toHaveAttribute("aria-current", "page");
   });
 });
+
+test.describe("groups (specs/06-группы.md)", () => {
+  function groupNav(page: Page) {
+    return page.getByRole("navigation", { name: "Какую группу показать" });
+  }
+
+  // A group above the list: its name, then how many contacts it has.
+  function groupChip(page: Page, name: string) {
+    return groupNav(page).getByRole("link", {
+      name: new RegExp(`^${name}\\s*\\d+$`),
+    });
+  }
+
+  function groupsPanelList(page: Page) {
+    return page.getByRole("list", { name: "Все группы" });
+  }
+
+  function newGroupField(page: Page) {
+    return page.getByLabel("Новая группа");
+  }
+
+  test("a group is created, renamed and deleted in the groups panel", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("link", { name: "Настроить группы" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Группы", level: 2 }),
+    ).toBeVisible();
+    await expect(newGroupField(page)).toBeFocused();
+
+    await newGroupField(page).fill("Хор");
+    await newGroupField(page).press("Enter");
+    await expect(
+      groupsPanelList(page).getByText("Хор", { exact: true }),
+    ).toBeVisible();
+    await expect(newGroupField(page)).toHaveValue("");
+    await expect(groupChip(page, "Хор")).toBeVisible();
+
+    // The same name in other letters is the same group.
+    await newGroupField(page).fill("ХОР");
+    await page.getByRole("button", { name: "Создать группу" }).click();
+    await expect(page.getByText("Группа «ХОР» уже есть")).toBeVisible();
+    await expect(newGroupField(page)).toHaveValue("ХОР");
+
+    await page
+      .getByRole("button", { name: "Переименовать группу «Хор»" })
+      .click();
+    const renameField = page.getByLabel("Новое название группы «Хор»");
+    await expect(renameField).toBeFocused();
+    await renameField.fill("Хор при ДК");
+    await renameField.press("Enter");
+    await expect(
+      groupsPanelList(page).getByText("Хор при ДК", { exact: true }),
+    ).toBeVisible();
+    await expect(groupChip(page, "Хор при ДК")).toBeVisible();
+
+    await page
+      .getByRole("button", { name: "Удалить группу «Хор при ДК»" })
+      .click();
+    const dialog = page.getByRole("alertdialog");
+    await expect(dialog).toContainText("Удалить группу «Хор при ДК»?");
+    await expect(dialog).toContainText("Контакты останутся");
+    await dialog.getByRole("button", { name: "Удалить", exact: true }).click();
+    await expect(groupsPanelList(page).getByText("Хор при ДК")).toHaveCount(0);
+    await expect(groupChip(page, "Хор при ДК")).toHaveCount(0);
+  });
+
+  test("a contact joins groups in its form and the list narrows to a group", async ({
+    page,
+  }) => {
+    const name = "Зинаида Хоровая";
+    const group = "Хор по четвергам";
+
+    await page.goto("/");
+    await page.getByRole("link", { name: "Добавить контакт" }).click();
+    await page.getByLabel("Имя").fill(name);
+    // Enter in «Новая группа» makes the group and does not save the contact.
+    await newGroupField(page).fill(group);
+    await newGroupField(page).press("Enter");
+    await expect(
+      page.getByRole("checkbox", { name: group, exact: true }),
+    ).toBeChecked();
+    await expect(page.getByLabel("Имя")).toHaveValue(name);
+    await expect(newGroupField(page)).toHaveValue("");
+    await page.getByRole("checkbox", { name: "Друзья", exact: true }).check();
+    await page.getByRole("button", { name: "Добавить", exact: true }).click();
+    await expect(cardHeading(page, name)).toBeVisible();
+    await expect(page.getByText(`Друзья, ${group}`)).toBeVisible();
+    const cardUrl = page.url();
+
+    // One group: only its people, and the open card stays.
+    await groupChip(page, group).click();
+    await expect(groupChip(page, group)).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await expect(listRows(page)).toHaveCount(1);
+    expect(await readTotal(page)).toBe(1);
+    await expect(cardHeading(page, name)).toBeVisible();
+
+    // Not among those without a group.
+    await groupNav(page).getByRole("link", { name: "Без группы" }).click();
+    await searchField(page).fill("хоровая");
+    await expect(
+      contactList(page).getByText(
+        "Среди контактов без группы никого не нашлось",
+      ),
+    ).toBeVisible();
+
+    // Taken out of the group in the form, the group is empty.
+    await page.goto(cardUrl);
+    await page.getByRole("link", { name: "Изменить" }).click();
+    await page.getByRole("checkbox", { name: group, exact: true }).uncheck();
+    await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+    await expect(cardHeading(page, name)).toBeVisible();
+    await expect(
+      page
+        .getByRole("region", { name: "Карточка контакта" })
+        .getByText("Друзья", { exact: true }),
+    ).toBeVisible();
+    await groupChip(page, group).click();
+    await expect(
+      contactList(page).getByText(`В группе «${group}» пока никого`),
+    ).toBeVisible();
+  });
+
+  test("«+» inside a group starts the new contact in that group", async ({
+    page,
+  }) => {
+    const name = "Тимур Соседский";
+
+    await page.goto("/");
+    await groupChip(page, "Соседи").click();
+    await expect(groupChip(page, "Соседи")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    const before = await readTotal(page);
+    await page.getByRole("link", { name: "Добавить контакт" }).click();
+    await expect(
+      page.getByRole("checkbox", { name: "Соседи", exact: true }),
+    ).toBeChecked();
+    await page.getByLabel("Имя").fill(name);
+    await page.getByRole("button", { name: "Добавить", exact: true }).click();
+    await expect(cardHeading(page, name)).toBeVisible();
+
+    // Still in the group, now one more.
+    expect(new URL(page.url()).searchParams.get("group")).not.toBeNull();
+    await expect.poll(() => readTotal(page)).toBe(before + 1);
+    await expect(contactList(page).getByText(name)).toBeVisible();
+  });
+
+  test("a group works together with the search and «Пора написать»", async ({
+    page,
+  }) => {
+    const dueLink = page.getByRole("link", { name: /^Пора написать/ });
+
+    await page.goto("/");
+    await groupChip(page, "Работа").click();
+    await dueLink.click();
+    await expect(dueLink).toHaveAttribute("aria-current", "page");
+    await expect(groupChip(page, "Работа")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    const params = new URL(page.url()).searchParams;
+    expect(params.get("due")).toBe("1");
+    expect(params.get("group")).not.toBeNull();
+
+    // Two namesakes: the one from ProductCamp is at work, the other a neighbour.
+    await page.getByRole("link", { name: "Все", exact: true }).click();
+    await searchField(page).fill("анна пет");
+    await expect(listRows(page)).toHaveCount(1);
+    await expect(listRows(page)).toContainText("Конференция ProductCamp");
+    await expect(groupChip(page, "Работа")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  test("a group that failed to create keeps its name and is made on retry", async ({
+    page,
+  }) => {
+    await page.goto("/?groups=1");
+    await page.route("**/*", dropServerFunctions);
+    await newGroupField(page).fill("Бадминтон");
+    await page.getByRole("button", { name: "Создать группу" }).click();
+    await expect(
+      page.getByText(
+        "Не удалось создать группу: приложение не отвечает. Название на месте.",
+      ),
+    ).toBeVisible();
+    await expect(newGroupField(page)).toHaveValue("Бадминтон");
+
+    await page.unroute("**/*", dropServerFunctions);
+    await page.getByRole("button", { name: "Повторить" }).click();
+    await expect(
+      groupsPanelList(page).getByText("Бадминтон", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("Не удалось создать группу")).toBeHidden();
+  });
+});

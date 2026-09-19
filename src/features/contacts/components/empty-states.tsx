@@ -1,6 +1,7 @@
 import { UserPlus } from "lucide-react";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
+import type { GroupFilter } from "../data/contacts-repo";
 import { screenHref } from "../screen-url";
 
 export function StartHint() {
@@ -69,6 +70,47 @@ export function NoDueSearchResults({ query }: { query: string }) {
   );
 }
 
+// groupName is null for «Без группы».
+export function EmptyGroup({ groupName }: { groupName: string | null }) {
+  return (
+    <div className="px-4 py-8 text-center">
+      <p className="font-medium wrap-anywhere">
+        {groupName === null
+          ? "Все контакты разложены по группам"
+          : `В группе «${groupName}» пока никого`}
+      </p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        В какие группы входит человек, отмечается в его карточке: «Изменить» →
+        «Группы».
+      </p>
+    </div>
+  );
+}
+
+export function NoGroupSearchResults({
+  query,
+  groupName,
+}: {
+  query: string;
+  groupName: string | null;
+}) {
+  return (
+    <div className="px-4 py-8 text-center">
+      <p className="font-medium wrap-anywhere">
+        {groupName === null
+          ? "Среди контактов без группы никого не нашлось"
+          : `В группе «${groupName}» никого не нашлось`}
+      </p>
+      <Link
+        href={screenHref({ q: query })}
+        className={buttonVariants({ variant: "outline", className: "mt-4" })}
+      >
+        Искать среди всех
+      </Link>
+    </div>
+  );
+}
+
 export function NoContactsYet() {
   return (
     <div className="px-4 py-8 text-center">
@@ -87,9 +129,11 @@ export function NoContactsYet() {
 export function ContactMissing({
   query,
   isDueList,
+  groupFilter,
 }: {
   query: string;
   isDueList: boolean;
+  groupFilter: GroupFilter;
 }) {
   return (
     <div className="grid h-full min-h-64 place-items-center p-8 text-center">
@@ -102,7 +146,7 @@ export function ContactMissing({
           контактов работает как обычно.
         </p>
         <Link
-          href={screenHref({ q: query, isDueList })}
+          href={screenHref({ q: query, isDueList, groupFilter })}
           className={buttonVariants({ variant: "outline", className: "mt-4" })}
         >
           К списку

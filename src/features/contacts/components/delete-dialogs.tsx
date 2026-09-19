@@ -15,7 +15,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { deleteContact, deleteNote } from "../actions";
+import { deleteContact, deleteGroup, deleteNote } from "../actions";
+import type { GroupFilter } from "../data/contacts-repo";
 import { screenHref } from "../screen-url";
 
 type ConfirmState = {
@@ -135,11 +136,13 @@ export function DeleteContactButton({
   question,
   query,
   isDueList,
+  groupFilter,
 }: {
   contactId: number;
   question: string;
   query: string;
   isDueList: boolean;
+  groupFilter: GroupFilter;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -181,7 +184,79 @@ export function DeleteContactButton({
                 if (result.ok) {
                   setOpen(false);
                   // Back to the list, keeping the current search.
-                  router.push(screenHref({ q: query, isDueList }));
+                  router.push(screenHref({ q: query, isDueList, groupFilter }));
+                }
+                return result;
+              })
+            }
+          >
+            {isPending ? "Удаляю…" : "Удалить"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+// The contacts of the group stay; only the group goes.
+export function DeleteGroupButton({
+  groupId,
+  name,
+  question,
+}: {
+  groupId: number;
+  name: string;
+  question: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const { error, isPending, run, reset } = useConfirm();
+
+  return (
+    <AlertDialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
+          reset();
+        }
+      }}
+    >
+      <AlertDialogTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Удалить группу «${name}»`}
+            className="text-muted-foreground hover:text-destructive"
+          />
+        }
+      >
+        <Trash2 aria-hidden />
+        Удалить
+      </AlertDialogTrigger>
+      <AlertDialogContent initialFocus={cancelRef}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{question}</AlertDialogTitle>
+          <AlertDialogDescription>
+            Контакты останутся — пропадёт только группа.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <DialogError error={error} />
+        <AlertDialogFooter>
+          <AlertDialogCancel ref={cancelRef} disabled={isPending}>
+            Отмена
+          </AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={isPending}
+            onClick={() =>
+              run(async () => {
+                const result = await deleteGroup({ groupId });
+                if (result.ok) {
+                  setOpen(false);
+                  // The row is gone; the keyboard goes to «Новая группа».
+                  document.getElementById("group-new")?.focus();
                 }
                 return result;
               })

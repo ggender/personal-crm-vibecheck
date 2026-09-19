@@ -1,6 +1,17 @@
-import { and, asc, count, eq, isNotNull, max, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  eq,
+  exists,
+  inArray,
+  isNotNull,
+  max,
+  notExists,
+  sql,
+} from "drizzle-orm";
 import { getDb, type Db } from "@/db/client";
-import { contacts, notes } from "@/db/schema";
+import { contactGroups, contacts, groups, notes } from "@/db/schema";
 import {
   escapeLike,
   normalizeName,
@@ -35,7 +46,13 @@ export type ContactFields = {
   phone?: string;
   email?: string;
   keepInTouchDays?: number | null;
+  // The contact's groups replace the old ones; not given — they stay.
+  groupIds?: number[];
 };
+
+// Which contacts the list shows: everyone (null), the contacts of one
+// group, or the contacts without any group ("none").
+export type GroupFilter = number | "none" | null;
 
 export type NewContact = ContactFields & { firstNote?: string };
 
@@ -73,6 +90,51 @@ function isOwned(ownerId: number, id: number) {
   return and(eq(contacts.ownerId, ownerId), eq(contacts.id, id));
 }
 
+function inGroup(group: GroupFilter, db: Db) {
+  if (group === null) {
+    return [];
+  }
+  const links = db
+    .select({ contactId: contactGroups.contactId })
+    .from(contactGroups);
+  if (group === "none") {
+    return [notExists(links.where(eq(contactGroups.contactId, contacts.id)))];
+  }
+  return [
+    exists(
+      links.where(
+        and(
+          eq(contactGroups.contactId, contacts.id),
+          eq(contactGroups.groupId, group),
+        ),
+      ),
+    ),
+  ];
+}
+
+// Only the owner's own groups are linked: one that is gone (deleted in
+// another tab) or someone else's is skipped.
+async function replaceGroups(
+  ownerId: number,
+  contactId: number,
+  groupIds: number[],
+  db: Db,
+): Promise<void> {
+  await db.delete(contactGroups).where(eq(contactGroups.contactId, contactId));
+  if (groupIds.length === 0) {
+    return;
+  }
+  await db.insert(contactGroups).select(
+    db
+      .select({
+        contactId: sql<number>`cast(${contactId} as integer)`.as("contact_id"),
+        groupId: groups.id,
+      })
+      .from(groups)
+      .where(and(eq(groups.ownerId, ownerId), inArray(groups.id, groupIds))),
+  );
+}
+
 // Every word of the query must be part of the name.
 function nameMatches(query: string) {
   return splitSearchQuery(query).map(
@@ -84,6 +146,7 @@ function nameMatches(query: string) {
 export async function searchContacts(
   ownerId: number,
   query: string,
+  group: GroupFilter,
   db: Db = getDb(),
 ): Promise<ContactListItem[]> {
   return db
@@ -93,7 +156,13 @@ export async function searchContacts(
       metContext: contacts.metContext,
     })
     .from(contacts)
-    .where(and(eq(contacts.ownerId, ownerId), ...nameMatches(query)))
+    .where(
+      and(
+        eq(contacts.ownerId, ownerId),
+        ...nameMatches(query),
+        ...inGroup(group, db),
+      ),
+    )
     .orderBy(asc(contacts.nameSearch), asc(contacts.id));
 }
 
@@ -102,6 +171,7 @@ export async function searchContacts(
 export async function listKeepInTouch(
   ownerId: number,
   query: string,
+  group: GroupFilter,
   db: Db = getDb(),
 ): Promise<KeepInTouchItem[]> {
   const rows = await db
@@ -121,6 +191,7 @@ export async function listKeepInTouch(
         eq(contacts.ownerId, ownerId),
         isNotNull(contacts.keepInTouchDays),
         ...nameMatches(query),
+        ...inGroup(group, db),
       ),
     )
     .groupBy(contacts.id)
@@ -132,12 +203,13 @@ export async function listKeepInTouch(
 
 export async function countContacts(
   ownerId: number,
+  group: GroupFilter,
   db: Db = getDb(),
 ): Promise<number> {
   const [row] = await db
     .select({ value: count() })
     .from(contacts)
-    .where(eq(contacts.ownerId, ownerId));
+    .where(and(eq(contacts.ownerId, ownerId), ...inGroup(group, db)));
   return row?.value ?? 0;
 }
 
@@ -165,6 +237,7 @@ export async function createContact(
       .insert(contacts)
       .values({ ...buildContactRow(input, now), ownerId })
       .returning({ id: contacts.id });
+    await replaceGroups(ownerId, id, input.groupIds ?? [], tx);
     if (firstNote !== "") {
       await tx
         .insert(notes)
@@ -189,20 +262,28 @@ export async function updateContact(
     keepInTouchDays,
     updatedAt,
   } = buildContactRow(fields, new Date());
-  const updated = await db
-    .update(contacts)
-    .set({
-      name,
-      nameSearch,
-      metContext,
-      phone,
-      email,
-      keepInTouchDays,
-      updatedAt,
-    })
-    .where(isOwned(ownerId, id))
-    .returning({ id: contacts.id });
-  return updated.length > 0;
+  return db.transaction(async (tx) => {
+    const updated = await tx
+      .update(contacts)
+      .set({
+        name,
+        nameSearch,
+        metContext,
+        phone,
+        email,
+        keepInTouchDays,
+        updatedAt,
+      })
+      .where(isOwned(ownerId, id))
+      .returning({ id: contacts.id });
+    if (updated.length === 0) {
+      return false;
+    }
+    if (fields.groupIds !== undefined) {
+      await replaceGroups(ownerId, id, fields.groupIds, tx);
+    }
+    return true;
+  });
 }
 
 // «Пообщались»: restarts the keep-in-touch clock. Not an edit of the
@@ -220,7 +301,7 @@ export async function markTalked(
   return marked.length > 0;
 }
 
-// Notes go too: the foreign key is ON DELETE CASCADE.
+// Notes and links to groups go too: the foreign keys are ON DELETE CASCADE.
 export async function deleteContact(
   ownerId: number,
   id: number,

@@ -4,9 +4,12 @@ import {
   LIMITS,
   addNoteInput,
   createContactInput,
+  createGroupInput,
+  deleteGroupInput,
   fieldErrors,
   firstIssueMessage,
   markTalkedInput,
+  renameGroupInput,
   updateContactInput,
 } from "./validation";
 
@@ -67,6 +70,7 @@ describe("createContactInput", () => {
       phone: "+7 900 555-00-00",
       email: "mark@example.com",
       keepInTouchDays: null,
+      groupIds: [],
       firstNote: "Пришлёт ссылку",
     });
     expect(createContactInput.parse({ name: "Марк" })).toMatchObject({
@@ -121,6 +125,7 @@ describe("updateContactInput", () => {
       phone: "",
       email: "",
       keepInTouchDays: null,
+      groupIds: [],
     });
     expect(updateContactInput.safeParse({ name: "Марк" }).success).toBe(false);
   });
@@ -164,6 +169,88 @@ describe("markTalkedInput", () => {
     expect(markTalkedInput.parse({ contactId: 3 })).toEqual({ contactId: 3 });
     for (const contactId of [0, -1, 1.5, "3", null]) {
       expect(markTalkedInput.safeParse({ contactId }).success).toBe(false);
+    }
+  });
+});
+
+describe("groupIds", () => {
+  it("means no groups when not given", () => {
+    expect(createContactInput.parse({ name: "Марк" }).groupIds).toEqual([]);
+  });
+
+  it("takes the ticked groups when adding and when editing", () => {
+    expect(
+      createContactInput.parse({ name: "Марк", groupIds: [3, 5] }).groupIds,
+    ).toEqual([3, 5]);
+    expect(
+      updateContactInput.parse({ id: 4, name: "Марк", groupIds: [2] }).groupIds,
+    ).toEqual([2]);
+  });
+
+  it("refuses anything but positive whole group ids", () => {
+    for (const groupIds of [[0], [-2], [1.5], ["3"], [null], "3", 3]) {
+      const result = createContactInput.safeParse({ name: "Марк", groupIds });
+      expect(result.success).toBe(false);
+      expect(fieldErrors(result.error!)).toEqual({
+        groupIds: "Не удалось понять, какая это группа",
+      });
+    }
+  });
+});
+
+describe("group name", () => {
+  it("trims the name", () => {
+    expect(createGroupInput.parse({ name: "  Работа \n" })).toEqual({
+      name: "Работа",
+    });
+  });
+
+  it("asks for a name", () => {
+    for (const name of ["", "   ", undefined]) {
+      const result = createGroupInput.safeParse({ name });
+      expect(result.success).toBe(false);
+      expect(firstIssueMessage(result.error!)).toBe("Напиши название группы");
+    }
+  });
+
+  it("accepts exactly 50 characters and refuses more", () => {
+    expect(LIMITS.groupName).toBe(50);
+    expect(createGroupInput.safeParse({ name: "я".repeat(50) }).success).toBe(
+      true,
+    );
+    const tooLong = createGroupInput.safeParse({ name: "я".repeat(51) });
+    expect(tooLong.success).toBe(false);
+    expect(firstIssueMessage(tooLong.error!)).toBe(
+      "Название группы длиннее 50 знаков — сократи его",
+    );
+  });
+
+  it("renaming checks the new name the same way", () => {
+    expect(renameGroupInput.parse({ groupId: 3, name: " Друзья " })).toEqual({
+      groupId: 3,
+      name: "Друзья",
+    });
+    expect(
+      firstIssueMessage(
+        renameGroupInput.safeParse({ groupId: 3, name: " " }).error!,
+      ),
+    ).toBe("Напиши название группы");
+  });
+});
+
+describe("group id", () => {
+  it("requires a positive whole group id to rename or delete", () => {
+    expect(deleteGroupInput.parse({ groupId: 3 })).toEqual({ groupId: 3 });
+    for (const groupId of [0, -1, 1.5, "3", null]) {
+      for (const result of [
+        deleteGroupInput.safeParse({ groupId }),
+        renameGroupInput.safeParse({ groupId, name: "Работа" }),
+      ]) {
+        expect(result.success).toBe(false);
+        expect(firstIssueMessage(result.error!)).toBe(
+          "Не удалось понять, какая это группа",
+        );
+      }
     }
   });
 });

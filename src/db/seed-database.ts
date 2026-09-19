@@ -2,10 +2,11 @@ import {
   buildContactRow,
   countContacts,
 } from "@/features/contacts/data/contacts-repo";
+import { normalizeName } from "@/features/contacts/normalize-name";
 import { KEEP_IN_TOUCH_DAYS } from "@/features/contacts/validation";
 import { eq } from "drizzle-orm";
 import type { Db } from "./client";
-import { contacts, notes, users } from "./schema";
+import { contactGroups, contacts, groups, notes, users } from "./schema";
 import {
   DOUBLE_FIRST_NAMES,
   FEATURED_CONTACTS,
@@ -13,6 +14,7 @@ import {
   MALE_FIRST_NAMES,
   MET_CONTEXTS,
   NOTE_TEMPLATES,
+  SEED_GROUPS,
   SURNAMES,
   femaleSurname,
   pickGendered,
@@ -32,6 +34,10 @@ const RANDOM_SEED = 20260917;
 // notes stay the same as before rhythms existed.
 const RHYTHM_SEED = 20260918;
 const RHYTHM_SHARE = 0.04;
+// Groups draw from their own sequence too: only some people are sorted into
+// groups, the way a notebook looks after a few weeks of use.
+const GROUP_SEED = 20260919;
+const GROUP_SHARE = 0.45;
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Notes stay inside the last 18 months, contacts inside the last 2 years.
 const NOTE_WINDOW_DAYS = 540;
@@ -43,6 +49,8 @@ type SeedContact = {
   phone: string;
   email: string;
   keepInTouchDays: number | null;
+  // Names from SEED_GROUPS.
+  groups: readonly string[];
   createdAt: Date;
   notes: { body: string; createdAt: Date }[];
 };
@@ -65,6 +73,13 @@ function createRandom(seed: number): () => number {
 export function generateSeedContacts(now: Date): SeedContact[] {
   const random = createRandom(RANDOM_SEED);
   const rhythmRandom = createRandom(RHYTHM_SEED);
+  const groupRandom = createRandom(GROUP_SEED);
+  const randomGroups = (metContext: string) =>
+    groupRandom() < GROUP_SHARE
+      ? SEED_GROUPS.filter((group) => group.metContext.test(metContext)).map(
+          (group) => group.name,
+        )
+      : [];
   const randomRhythm = () =>
     rhythmRandom() < RHYTHM_SHARE
       ? KEEP_IN_TOUCH_DAYS[
@@ -108,6 +123,7 @@ export function generateSeedContacts(now: Date): SeedContact[] {
           featured.email ??
           (chance(0.5) ? randomEmail(featured.first, featured.last) : ""),
         keepInTouchDays: featured.keepInTouchDays ?? null,
+        groups: featured.groups ?? [],
       },
       (featured.notes ?? []).map((note) => ({
         body: note.body,
@@ -132,17 +148,19 @@ export function generateSeedContacts(now: Date): SeedContact[] {
       .map((surname) => (gender === "m" ? surname : femaleSurname(surname)))
       .join("-");
     const noteCount = chance(0.4) ? 1 + int(4) : 0;
+    const metContext = chance(0.03)
+      ? ""
+      : pickGendered(pick(MET_CONTEXTS), gender);
 
     people.push(
       withDates(
         {
           name: `${first} ${last}`,
-          metContext: chance(0.03)
-            ? ""
-            : pickGendered(pick(MET_CONTEXTS), gender),
+          metContext,
           phone: chance(0.6) ? randomPhone() : "",
           email: chance(0.5) ? randomEmail(first, last) : "",
           keepInTouchDays: randomRhythm(),
+          groups: randomGroups(metContext),
         },
         Array.from({ length: noteCount }, () => ({
           body: pickGendered(pick(NOTE_TEMPLATES), gender),
@@ -173,7 +191,7 @@ export async function seedDatabase(
   now: Date = new Date(),
 ): Promise<SeedResult> {
   const ownerId = await demoUserId(db);
-  const existing = await countContacts(ownerId, db);
+  const existing = await countContacts(ownerId, null, db);
   if (existing > 0) {
     return { status: "skipped", contacts: existing };
   }
@@ -181,11 +199,31 @@ export async function seedDatabase(
   let noteCount = 0;
   const people = generateSeedContacts(now);
   await db.transaction(async (tx) => {
+    const groupRows = await tx
+      .insert(groups)
+      .values(
+        SEED_GROUPS.map(({ name }) => ({
+          ownerId,
+          name,
+          nameSearch: normalizeName(name),
+        })),
+      )
+      .returning({ id: groups.id, name: groups.name });
+    const groupIdByName = new Map(groupRows.map((row) => [row.name, row.id]));
+
     for (const person of people) {
       const [{ id }] = await tx
         .insert(contacts)
         .values({ ...buildContactRow(person, person.createdAt), ownerId })
         .returning({ id: contacts.id });
+      if (person.groups.length > 0) {
+        await tx.insert(contactGroups).values(
+          person.groups.map((name) => ({
+            contactId: id,
+            groupId: groupIdByName.get(name)!,
+          })),
+        );
+      }
       if (person.notes.length > 0) {
         await tx
           .insert(notes)
@@ -195,7 +233,7 @@ export async function seedDatabase(
     }
   });
 
-  const total = await countContacts(ownerId, db);
+  const total = await countContacts(ownerId, null, db);
   if (total !== SEED_CONTACT_COUNT) {
     throw new Error(
       `Seed expected ${SEED_CONTACT_COUNT} contacts but found ${total}`,

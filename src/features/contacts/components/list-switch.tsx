@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
+import type { GroupFilter } from "../data/contacts-repo";
 import { screenHref } from "../screen-url";
 
 type ListSwitchProps = {
   query: string;
   isDueList: boolean;
+  groupFilter: GroupFilter;
   dueCount: number;
   // The open card stays open when the list changes.
   contactId: number | null;
@@ -13,6 +15,7 @@ type ListSwitchProps = {
 export function ListSwitch({
   query,
   isDueList,
+  groupFilter,
   dueCount,
   contactId,
 }: ListSwitchProps) {
@@ -25,7 +28,7 @@ export function ListSwitch({
       className="flex gap-1 border-b px-3 py-2"
     >
       <Link
-        href={screenHref({ q: query, contactId })}
+        href={screenHref({ q: query, groupFilter, contactId })}
         scroll={false}
         aria-current={isDueList ? undefined : "page"}
         className={option(!isDueList)}
@@ -33,7 +36,7 @@ export function ListSwitch({
         Все
       </Link>
       <Link
-        href={screenHref({ q: query, contactId, isDueList: true })}
+        href={screenHref({ q: query, groupFilter, contactId, isDueList: true })}
         scroll={false}
         aria-current={isDueList ? "page" : undefined}
         className={option(isDueList)}
