@@ -5,24 +5,22 @@ context: |
   All artifacts must be written in Russian.
   Keep OpenSpec structural headings and SHALL/MUST keywords in English.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+# Per-artifact rules: added to the schema's own instructions for that artifact.
+rules:
+  tasks:
+    - "У каждого добавленного или изменённого сценария дельта-спеки есть задача с тестом. Сценарий без теста — отдельное решение, названное в tasks.md, а не умолчание."
+    - "Каждая задача реализации идёт парой. Сначала «Тест: <название сценария из спеки>», затем «Реализация: …». Задача теста стоит выше задачи реализации и ссылается на сценарий по названию."
+    - "Уровень теста задаётся в задаче. Логика репозиториев, валидации и форматирования — Vitest на PGlite (src/**/*.test.ts); экраны и пользовательские сценарии — Playwright (e2e/*.spec.ts)."
+    - "Тест на поведение, которое в коде уже есть, помечается «(поведение уже есть)»: он зелёный сразу, и правило «сначала красный» к нему не применяется."
 
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+# Per-operation guidance: how apply and archive are conducted.
+operations:
+  apply:
+    guidance:
+      - "Порядок внутри пары строгий. Написать тест, запустить только его, показать вывод с падением. Реализацию не начинать, пока падения нет; если тест зелёный до реализации — он ничего не проверяет, переписать."
+      - "Если тест упал не по ожидаемой причине (опечатка, неверный селектор, не та фикстура), сначала чинить тест, а не код."
+      - "После реализации запустить тот же тест снова и показать зелёный вывод. Затем npm test целиком, не откладывая до конца изменения."
+      - "Отмечать [x] только пару целиком: тест написан, упал, реализация сделана, тест зелёный."
+  archive:
+    guidance:
+      - "Перед архивацией сверить дельта-спеку с tasks.md. У каждого сценария должен быть проходящий тест; сценарии без теста назвать явно и получить согласие на архивацию без них."

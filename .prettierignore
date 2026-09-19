@@ -13,3 +13,6 @@ next-env.d.ts
 
 # Database files
 data/
+
+# OpenSpec artifacts are written by the workflow, not formatted
+openspec/
