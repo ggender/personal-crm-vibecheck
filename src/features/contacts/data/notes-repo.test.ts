@@ -1,5 +1,19 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createTestDb, createTestUser, type TestDb } from "@/db/test-db";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import {
+  clearTestDb,
+  createTestDb,
+  createTestUser,
+  type TestDb,
+} from "@/db/test-db";
 import { createContact } from "./contacts-repo";
 import { addNote, countNotes, deleteNote, listNotes } from "./notes-repo";
 
@@ -8,15 +22,22 @@ let owner: number;
 let stranger: number;
 let contactId: number;
 
-beforeEach(async () => {
+beforeAll(async () => {
   db = await createTestDb();
+});
+
+beforeEach(async () => {
+  await clearTestDb(db);
   owner = await createTestUser(db, "owner@example.com");
   stranger = await createTestUser(db, "stranger@example.com");
   contactId = await createContact(owner, { name: "Анна Петрова" }, db);
 });
 
-afterEach(async () => {
+afterEach(() => {
   vi.useRealTimers();
+});
+
+afterAll(async () => {
   await db.$client.close();
 });
 

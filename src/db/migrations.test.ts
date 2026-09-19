@@ -2,7 +2,15 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
 import { MIGRATIONS_FOLDER } from "./run-migrations";
 
 type Journal = { entries: { idx: number; tag: string }[] };
@@ -24,15 +32,27 @@ async function apply(client: PGlite, idx: number): Promise<void> {
   }
 }
 
+// Booting PGlite takes ~1 s, cloning it ~0.15 s: one database at the first
+// migration, and every test gets a copy of it.
+let template: PGlite;
 let client: PGlite;
 
+beforeAll(async () => {
+  template = new PGlite();
+  await apply(template, 0);
+});
+
 beforeEach(async () => {
-  client = new PGlite();
-  await apply(client, 0);
+  // clone() is typed as the PGlite interface but returns a PGlite.
+  client = (await template.clone()) as PGlite;
 });
 
 afterEach(async () => {
   await client.close();
+});
+
+afterAll(async () => {
+  await template.close();
 });
 
 describe("migration 0001: users and contact owners", () => {

@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createContact } from "@/features/contacts/data/contacts-repo";
 import {
   keepInTouchState,
@@ -8,8 +8,19 @@ import { normalizeName } from "@/features/contacts/normalize-name";
 import { KEEP_IN_TOUCH_DAYS } from "@/features/contacts/validation";
 import { eq } from "drizzle-orm";
 import { contactGroups, contacts, groups, notes, users } from "./schema";
-import { DEMO_EMAIL, SEED_CONTACT_COUNT, seedDatabase } from "./seed-database";
-import { createTestDb, createTestUser, type TestDb } from "./test-db";
+import {
+  DEMO_EMAIL,
+  SEED_CONTACT_COUNT,
+  generateSeedContacts,
+  seedDatabase,
+  type SeedResult,
+} from "./seed-database";
+import {
+  clearTestDb,
+  createTestDb,
+  createTestUser,
+  type TestDb,
+} from "./test-db";
 
 const now = new Date("2026-09-17T12:00:00Z");
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -26,16 +37,27 @@ async function allRows(db: TestDb) {
   };
 }
 
+// Seeding 999 contacts takes ~0.4 s: one seeded database for every test that
+// only reads it.
+let seeded: TestDb;
+let seedResult: SeedResult;
+let rows: Awaited<ReturnType<typeof allRows>>;
+
+beforeAll(async () => {
+  seeded = await createTestDb();
+  seedResult = await seedDatabase(seeded, now);
+  rows = await allRows(seeded);
+});
+
+afterAll(async () => {
+  await seeded.$client.close();
+});
+
 describe("seedDatabase", () => {
-  it("fills an empty database with exactly 999 contacts", async () => {
-    const db = await createTestDb();
-
-    const result = await seedDatabase(db, now);
-
-    const rows = await allRows(db);
+  it("fills an empty database with exactly 999 contacts", () => {
     expect(SEED_CONTACT_COUNT).toBe(999);
     expect(rows.contacts).toHaveLength(999);
-    expect(result).toEqual({
+    expect(seedResult).toEqual({
       status: "seeded",
       contacts: 999,
       notes: rows.notes.length,
@@ -43,36 +65,42 @@ describe("seedDatabase", () => {
   });
 
   it("adds nothing on a second run", async () => {
-    const db = await createTestDb();
-    await seedDatabase(db, now);
-    const before = await allRows(db);
-
-    const result = await seedDatabase(db, now);
+    const result = await seedDatabase(seeded, now);
 
     expect(result).toEqual({ status: "skipped", contacts: 999 });
-    expect(await allRows(db)).toEqual(before);
+    expect(await allRows(seeded)).toEqual(rows);
   });
 
   it("gives every contact and group to the demo account", async () => {
-    const db = await createTestDb();
-
-    await seedDatabase(db, now);
-
-    const demo = await db
+    const demo = await seeded
       .select({ id: users.id, emailVerified: users.emailVerified })
       .from(users)
       .where(eq(users.email, DEMO_EMAIL));
     expect(DEMO_EMAIL).toBe("demo@example.com");
     expect(demo).toEqual([{ id: expect.any(Number), emailVerified: true }]);
-    const rows = await allRows(db);
     const owners = new Set(rows.contacts.map((contact) => contact.ownerId));
     expect([...owners]).toEqual([demo[0].id]);
     const groupOwners = new Set(rows.groups.map((group) => group.ownerId));
     expect([...groupOwners]).toEqual([demo[0].id]);
   });
+});
+
+describe("seedDatabase with accounts already there", () => {
+  let db: TestDb;
+
+  beforeAll(async () => {
+    db = await createTestDb();
+  });
+
+  beforeEach(async () => {
+    await clearTestDb(db);
+  });
+
+  afterAll(async () => {
+    await db.$client.close();
+  });
 
   it("uses the demo account the migration already made", async () => {
-    const db = await createTestDb();
     const demoId = await createTestUser(db, DEMO_EMAIL);
 
     await seedDatabase(db, now);
@@ -84,7 +112,6 @@ describe("seedDatabase", () => {
   });
 
   it("leaves a demo account with any contacts alone", async () => {
-    const db = await createTestDb();
     const demoId = await createTestUser(db, DEMO_EMAIL);
     await createContact(demoId, { name: "Моя Анна" }, db);
 
@@ -95,7 +122,6 @@ describe("seedDatabase", () => {
   });
 
   it("seeds the demo account even when other accounts have contacts", async () => {
-    const db = await createTestDb();
     const otherId = await createTestUser(db, "anna@example.com");
     await createContact(otherId, { name: "Своя Анна" }, db);
 
@@ -104,27 +130,15 @@ describe("seedDatabase", () => {
     expect(result).toMatchObject({ status: "seeded", contacts: 999 });
     expect((await allRows(db)).contacts).toHaveLength(1000);
   });
+});
 
-  it("produces the same data every time", async () => {
-    const first = await createTestDb();
-    const second = await createTestDb();
-
-    await seedDatabase(first, now);
-    await seedDatabase(second, now);
-
-    expect(await allRows(second)).toEqual(await allRows(first));
+describe("generateSeedContacts", () => {
+  it("produces the same people every time", () => {
+    expect(generateSeedContacts(now)).toEqual(generateSeedContacts(now));
   });
 });
 
 describe("seed content", () => {
-  let rows: Awaited<ReturnType<typeof allRows>>;
-
-  beforeAll(async () => {
-    const db = await createTestDb();
-    await seedDatabase(db, now);
-    rows = await allRows(db);
-  });
-
   it("stores the search form of every name", () => {
     for (const contact of rows.contacts) {
       expect(contact.nameSearch).toBe(normalizeName(contact.name));

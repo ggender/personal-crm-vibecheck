@@ -1,6 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { contactGroups } from "@/db/schema";
-import { createTestDb, createTestUser, type TestDb } from "@/db/test-db";
+import {
+  clearTestDb,
+  createTestDb,
+  createTestUser,
+  type TestDb,
+} from "@/db/test-db";
 import { createContact, deleteContact, getContact } from "./contacts-repo";
 import {
   createGroup,
@@ -15,13 +20,17 @@ let db: TestDb;
 let owner: number;
 let stranger: number;
 
-beforeEach(async () => {
+beforeAll(async () => {
   db = await createTestDb();
+});
+
+beforeEach(async () => {
+  await clearTestDb(db);
   owner = await createTestUser(db, "owner@example.com");
   stranger = await createTestUser(db, "stranger@example.com");
 });
 
-afterEach(async () => {
+afterAll(async () => {
   await db.$client.close();
 });
 

@@ -1,7 +1,22 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from "vitest";
 import { eq } from "drizzle-orm";
 import { contacts, notes } from "@/db/schema";
-import { createTestDb, createTestUser, type TestDb } from "@/db/test-db";
+import {
+  clearTestDb,
+  createTestDb,
+  createTestUser,
+  type TestDb,
+} from "@/db/test-db";
 import {
   addContactToGroup,
   countContacts,
@@ -22,16 +37,37 @@ let db: TestDb;
 let owner: number;
 let stranger: number;
 
-beforeEach(async () => {
+beforeAll(async () => {
   db = await createTestDb();
+});
+
+beforeEach(async () => {
+  await clearTestDb(db);
   owner = await createTestUser(db, "owner@example.com");
   stranger = await createTestUser(db, "stranger@example.com");
 });
 
-afterEach(async () => {
+afterEach(() => {
   vi.useRealTimers();
+});
+
+afterAll(async () => {
   await db.$client.close();
 });
+
+// A database of its own where every note insert fails. The trigger stays
+// after clearTestDb, so the shared database must never get it.
+async function failingNotesDb(): Promise<{ db: TestDb; owner: number }> {
+  const broken = await createTestDb();
+  onTestFinished(() => broken.$client.close());
+  await broken.$client.exec(`
+    CREATE FUNCTION fail_notes() RETURNS trigger LANGUAGE plpgsql
+      AS $$ BEGIN RAISE EXCEPTION 'boom'; END $$;
+    CREATE TRIGGER fail_notes BEFORE INSERT ON notes
+      FOR EACH ROW EXECUTE FUNCTION fail_notes();
+  `);
+  return { db: broken, owner: await createTestUser(broken, "owner@example.com") };
+}
 
 async function nameSearchOf(id: number): Promise<string | undefined> {
   const [row] = await db
@@ -114,17 +150,16 @@ describe("createContact", () => {
   });
 
   it("does not keep the contact when the first note fails", async () => {
-    await db.$client.exec(`
-      CREATE FUNCTION fail_notes() RETURNS trigger LANGUAGE plpgsql
-        AS $$ BEGIN RAISE EXCEPTION 'boom'; END $$;
-      CREATE TRIGGER fail_notes BEFORE INSERT ON notes
-        FOR EACH ROW EXECUTE FUNCTION fail_notes();
-    `);
+    const broken = await failingNotesDb();
 
     await expect(
-      createContact(owner, { name: "Анна", firstNote: "Заметка" }, db),
+      createContact(
+        broken.owner,
+        { name: "Анна", firstNote: "Заметка" },
+        broken.db,
+      ),
     ).rejects.toThrow();
-    expect(await countContacts(owner, null, db)).toBe(0);
+    expect(await countContacts(broken.owner, null, broken.db)).toBe(0);
   });
 });
 
@@ -611,21 +646,18 @@ describe("groups of a contact", () => {
   });
 
   it("are not saved when the contact fails to save", async () => {
-    await db.$client.exec(`
-      CREATE FUNCTION fail_notes() RETURNS trigger LANGUAGE plpgsql
-        AS $$ BEGIN RAISE EXCEPTION 'boom'; END $$;
-      CREATE TRIGGER fail_notes BEFORE INSERT ON notes
-        FOR EACH ROW EXECUTE FUNCTION fail_notes();
-    `);
+    const broken = await failingNotesDb();
+    const brokenWork = (await createGroup(broken.owner, "Работа", broken.db))!
+      .id;
 
     await expect(
       createContact(
-        owner,
-        { name: "Анна", groupIds: [work], firstNote: "Заметка" },
-        db,
+        broken.owner,
+        { name: "Анна", groupIds: [brokenWork], firstNote: "Заметка" },
+        broken.db,
       ),
     ).rejects.toThrow();
-    expect(await countContacts(owner, null, db)).toBe(0);
+    expect(await countContacts(broken.owner, null, broken.db)).toBe(0);
   });
 });
 
