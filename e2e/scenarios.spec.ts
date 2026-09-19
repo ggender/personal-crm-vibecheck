@@ -792,3 +792,278 @@ test.describe("groups (specs/06-группы.md)", () => {
     await expect(page.getByText("Не удалось создать группу")).toBeHidden();
   });
 });
+
+// Scenarios of openspec/specs that had no test in the baseline: contacts,
+// search, notes, groups, auth, ownership, privacy, database-status.
+test.describe("baseline scenarios", () => {
+  function card(page: Page) {
+    return page.getByRole("region", { name: "Карточка контакта" });
+  }
+
+  test("the form starts in the name field; Enter saves from a field and breaks a line in the note", async ({
+    page,
+  }) => {
+    const firstNote = page.getByLabel("О чём договорились");
+
+    await page.goto("/");
+    await page.getByRole("link", { name: "Добавить контакт" }).click();
+    await expect(page.getByLabel("Имя")).toBeFocused();
+
+    await firstNote.fill("первая строка");
+    await firstNote.press("Enter");
+    await firstNote.pressSequentially("вторая");
+    await expect(firstNote).toHaveValue("первая строка\nвторая");
+    await expect(
+      page.getByRole("heading", { name: "Новый контакт" }),
+    ).toBeVisible();
+
+    await page.getByLabel("Имя").fill("Энтер Клавишин");
+    await page.getByLabel("Имя").press("Enter");
+    await expect(cardHeading(page, "Энтер Клавишин")).toBeVisible();
+    await expect(notes(page).first()).toContainText("вторая");
+  });
+
+  test("«Отмена» in the edit form leaves the contact as it was", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await addContact(page, { name: "Ольга Прежняя" });
+    await page.getByRole("link", { name: "Изменить" }).click();
+    await page.getByLabel("Имя").fill("Ольга Новая");
+    await page.getByRole("link", { name: "Отмена" }).click();
+    await expect(cardHeading(page, "Ольга Прежняя")).toBeVisible();
+    await page.reload();
+    await expect(cardHeading(page, "Ольга Прежняя")).toBeVisible();
+  });
+
+  test("a contact form that failed to save keeps every field and saves on retry", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("link", { name: "Добавить контакт" }).click();
+    await page.getByLabel("Имя").fill("Сеть Пропалова");
+    await page.getByLabel("Откуда знакомы").fill("Дача");
+    await page.route("**/*", dropServerFunctions);
+    await page.getByRole("button", { name: "Добавить", exact: true }).click();
+    await expect(
+      page.getByText(
+        "Не удалось сохранить: приложение не отвечает. Введённое на месте.",
+      ),
+    ).toBeVisible();
+    await expect(page.getByLabel("Имя")).toHaveValue("Сеть Пропалова");
+    await expect(page.getByLabel("Откуда знакомы")).toHaveValue("Дача");
+
+    await page.unroute("**/*", dropServerFunctions);
+    await page.getByRole("button", { name: "Повторить" }).click();
+    await expect(cardHeading(page, "Сеть Пропалова")).toBeVisible();
+  });
+
+  test("the card shows «не указано» for empty fields and links for phone and email", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await addContact(page, { name: "Пустой Полев" });
+    await expect(card(page).getByText("не указано")).toHaveCount(3);
+
+    await page.getByRole("link", { name: "Добавить контакт" }).click();
+    await page.getByLabel("Имя").fill("Связной Полев");
+    await page.getByLabel("Телефон").fill("+7 (900) 555-12-34");
+    await page.getByLabel("Почта").fill("svyaznoy@example.com");
+    await page.getByRole("button", { name: "Добавить", exact: true }).click();
+    await expect(cardHeading(page, "Связной Полев")).toBeVisible();
+    await expect(
+      card(page).getByRole("link", { name: "+7 (900) 555-12-34" }),
+    ).toHaveAttribute("href", "tel:+79005551234");
+    await expect(
+      card(page).getByRole("link", { name: "svyaznoy@example.com" }),
+    ).toHaveAttribute("href", "mailto:svyaznoy@example.com");
+  });
+
+  test("the open contact is marked in the list and scrolled into view", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const first = listRows(page).first().getByRole("link");
+    await first.click();
+    await expect(first).toHaveAttribute("aria-current", "page");
+
+    const lastId = await listRows(page)
+      .last()
+      .getByRole("link")
+      .getAttribute("data-contact-id");
+    await page.goto(`/?contact=${lastId}`);
+    const row = contactList(page).locator(`[data-contact-id="${lastId}"]`);
+    await expect(row).toHaveAttribute("aria-current", "page");
+    await expect(row).toBeInViewport();
+  });
+
+  test("a skip link leads from the search straight to the card panel", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(searchField(page)).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(
+      page.getByRole("link", { name: "Перейти к карточке" }),
+    ).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(card(page)).toBeFocused();
+  });
+
+  test("the start screen asks who you just talked to and puts the cursor in the search", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { name: "С кем ты только что говорил?" }),
+    ).toBeVisible();
+    await expect(searchField(page)).toBeFocused();
+  });
+
+  test("the search waits 250 ms after the last letter and sends Enter at once", async ({
+    page,
+  }) => {
+    // Navigation requests of the app router, without link prefetches.
+    const sent: string[] = [];
+    page.on("request", (request) => {
+      const headers = request.headers();
+      const url = new URL(request.url());
+      if (headers["rsc"] && !headers["next-router-prefetch"]) {
+        const q = url.searchParams.get("q");
+        if (q !== null) {
+          sent.push(q);
+        }
+      }
+    });
+
+    await page.goto("/");
+    await expect(searchField(page)).toBeFocused();
+    await page.clock.install();
+
+    await searchField(page).pressSequentially("ор");
+    await page.clock.runFor(200);
+    await searchField(page).pressSequentially("л");
+    await page.clock.runFor(200);
+    expect(sent).toEqual([]);
+    await page.clock.runFor(100);
+    await expect.poll(() => sent).toEqual(["орл"]);
+    await expect(contactList(page).getByText(/^Найдено/)).toBeVisible();
+
+    await searchField(page).pressSequentially("о");
+    await searchField(page).press("Enter");
+    await expect.poll(() => sent).toEqual(["орл", "орло"]);
+  });
+
+  test("the note counter appears near the limit and marks an overflow", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await listRows(page).first().getByRole("link").click();
+    await noteField(page).fill("а".repeat(4500));
+    await expect(page.getByText("4500 из 5000 знаков")).toBeVisible();
+    await expect(noteField(page)).toHaveAttribute("aria-invalid", "false");
+
+    await noteField(page).fill("а".repeat(5001));
+    await expect(page.getByText("5001 из 5000 знаков")).toBeVisible();
+    await expect(noteField(page)).toHaveAttribute("aria-invalid", "true");
+
+    await noteField(page).fill("а".repeat(4499));
+    await expect(page.getByText(/из 5000 знаков/)).toHaveCount(0);
+  });
+
+  test("a contact without notes says the feed is empty", async ({ page }) => {
+    await page.goto("/");
+    await addContact(page, { name: "Тихий Безнотов" });
+    await expect(
+      page.getByText("Заметок пока нет. Запиши, о чём договорились."),
+    ).toBeVisible();
+  });
+
+  test("deleting a note asks in a dialog and returns the focus to the note field", async ({
+    page,
+  }) => {
+    const dialog = page.getByRole("alertdialog");
+
+    await page.goto("/");
+    await addContact(page, { name: "Нота Удалова", firstNote: "Черновик" });
+    await page.getByRole("button", { name: "Удалить заметку" }).click();
+    await expect(dialog).toContainText("Удалить сегодняшнюю заметку?");
+    await expect(dialog).toContainText("Вернуть удалённую заметку нельзя.");
+    await expect(dialog.getByRole("button", { name: "Отмена" })).toBeFocused();
+
+    await dialog.getByRole("button", { name: "Удалить", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(notes(page)).toHaveCount(0);
+    await expect(noteField(page)).toBeFocused();
+  });
+
+  test("Escape leaves the group name as it was and returns to «Переименовать»", async ({
+    page,
+  }) => {
+    const rename = page.getByRole("button", {
+      name: "Переименовать группу «Друзья»",
+    });
+    const field = page.getByLabel("Новое название группы «Друзья»");
+
+    await page.goto("/?groups=1");
+    await rename.click();
+    await field.fill("Приятели");
+    await field.press("Escape");
+    await expect(field).toHaveCount(0);
+    await expect(
+      page
+        .getByRole("list", { name: "Все группы" })
+        .getByText("Друзья", { exact: true }),
+    ).toBeVisible();
+    await expect(rename).toBeFocused();
+  });
+
+  test("a signed-in visitor of /login lands on the list", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page).toHaveURL(/\/$/);
+    await expect(contactList(page)).toBeVisible();
+  });
+
+  test("an expired session refuses to save and keeps the note text", async ({
+    page,
+    context,
+  }) => {
+    const note = "Договорились встретиться в четверг";
+
+    await page.goto("/");
+    await listRows(page).first().getByRole("link").click();
+    await noteField(page).fill(note);
+    // The session ended elsewhere: the page is still open.
+    await context.clearCookies();
+    await page.getByRole("button", { name: "Сохранить заметку" }).click();
+    await expect(page.getByText("Вход истёк — войди снова")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Повторить" })).toHaveCount(
+      0,
+    );
+    await expect(noteField(page)).toHaveValue(note);
+  });
+
+  test("a database that cannot be read shows «Что-то сломалось» without the search text", async ({
+    page,
+  }) => {
+    const db = new Client({ connectionString: E2E_DATABASE_URL });
+    await db.connect();
+    // As if the database could not be read: the migrations and the session
+    // are fine, the contacts are not.
+    await db.query("ALTER TABLE contacts RENAME TO contacts_unavailable");
+    try {
+      await page.goto("/?q=секретноеслово");
+      await expect(
+        page.getByRole("heading", { name: "Что-то сломалось" }),
+      ).toBeVisible();
+      await expect(page.getByText("Код ошибки:")).toBeVisible();
+      await expect(page.getByText("секретноеслово")).toHaveCount(0);
+    } finally {
+      await db.query("ALTER TABLE contacts_unavailable RENAME TO contacts");
+      await db.end();
+    }
+
+    await page.getByRole("button", { name: "Попробовать снова" }).click();
+    await expect(contactList(page)).toBeVisible();
+  });
+});

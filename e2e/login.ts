@@ -33,6 +33,21 @@ async function newestLetterText(
   return message.Text;
 }
 
+// Waits for a letter to this address that arrived after `since` and returns
+// the login link from it.
+export async function waitForLoginLink(
+  email: string,
+  since: Date,
+): Promise<string> {
+  let text: string | null = null;
+  await expect
+    .poll(async () => (text = await newestLetterText(email, since)))
+    .not.toBeNull();
+  const link = text!.match(/https?:\/\/\S+\/api\/auth\/magic-link\/verify\S+/);
+  expect(link).not.toBeNull();
+  return link![0];
+}
+
 // Fills the login form and returns the link from the letter.
 export async function requestLoginLink(
   page: Page,
@@ -45,14 +60,7 @@ export async function requestLoginLink(
   await expect(
     page.getByText(`Письмо со ссылкой отправлено на ${email}`),
   ).toBeVisible();
-
-  let text: string | null = null;
-  await expect
-    .poll(async () => (text = await newestLetterText(email, since)))
-    .not.toBeNull();
-  const link = text!.match(/https?:\/\/\S+\/api\/auth\/magic-link\/verify\S+/);
-  expect(link).not.toBeNull();
-  return link![0];
+  return waitForLoginLink(email, since);
 }
 
 export async function logIn(page: Page, email: string): Promise<void> {
