@@ -54,6 +54,14 @@ async function addContact(
   await expect(cardHeading(page, fields.name)).toBeVisible();
 }
 
+// An id twice on the page means a stale copy of a control was left behind.
+function duplicateIds(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const ids = [...document.querySelectorAll("[id]")].map((node) => node.id);
+    return [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
+  });
+}
+
 // Server Functions are POST requests marked with the Next-Action header.
 function dropServerFunctions(route: Route) {
   return route.request().headers()["next-action"]
@@ -479,6 +487,24 @@ test.describe("keep in touch (specs/04-keep-in-touch.md)", () => {
     await expect(page.getByText("следующий раз через 365 дней")).toBeVisible();
     await expect(rhythm).toHaveValue("365");
     await expect(page.getByText("Не удалось сохранить")).toBeHidden();
+  });
+
+  test("switching between contacts leaves one rhythm select in the card", async ({
+    page,
+  }) => {
+    await page.goto("/?due=1");
+    const rows = listRows(page);
+    // Both a rhythm and «Пообщались» in the line; clicked, not reloaded.
+    for (const index of [0, 1, 2, 0]) {
+      const link = rows.nth(index).getByRole("link");
+      const id = await link.getAttribute("data-contact-id");
+      await link.click();
+      await expect.poll(() => openContactId(page)).toBe(id);
+      await expect(
+        page.getByRole("button", { name: "Пообщались", exact: true }),
+      ).toHaveCount(1);
+      expect(await duplicateIds(page)).toEqual([]);
+    }
   });
 
   test("the search works inside the list and can widen to everyone", async ({

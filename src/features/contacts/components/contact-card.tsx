@@ -70,10 +70,15 @@ export function ContactCard({
       >
         {contact.name}
       </h2>
-      {/* «[Раз в месяц ▾] · пора написать: 45 дней без общения [Пообщались]» */}
-      <div className="-mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {/* «[Раз в месяц ▾] · пора написать: 45 дней без общения [Пообщались]».
+          One key for the whole line: another contact starts it afresh. Keys
+          must differ among siblings, or React loses the old select and
+          leaves it on the page. */}
+      <div
+        key={`keep-in-touch-${contact.id}`}
+        className="-mt-3 flex flex-wrap items-center gap-x-3 gap-y-1"
+      >
         <KeepInTouchSelect
-          key={contact.id}
           contactId={contact.id}
           keepInTouchDays={contact.keepInTouchDays}
         />
@@ -92,9 +97,7 @@ export function ContactCard({
             </>
           )}
         </p>
-        {keepInTouch && (
-          <MarkTalkedButton key={contact.id} contactId={contact.id} />
-        )}
+        {keepInTouch && <MarkTalkedButton contactId={contact.id} />}
       </div>
       <NoteForm
         key={contact.id}
