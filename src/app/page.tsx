@@ -40,6 +40,8 @@ import {
   screenHref,
   type ScreenState,
 } from "@/features/contacts/screen-url";
+import { DatabaseOutdated } from "@/features/database/components/database-outdated";
+import { isDatabaseOutdated } from "@/features/database/status";
 import { log } from "@/lib/log";
 
 async function loadScreen(ownerId: number, screen: ScreenState, now: Date) {
@@ -118,6 +120,10 @@ async function loadCard(ownerId: number, contactId: number | null, now: Date) {
 export default async function HomePage({ searchParams }: PageProps<"/">) {
   // The database is read on every request, never at build time.
   await connection();
+  // Before the session: its tables may be what the database lacks.
+  if (await isDatabaseOutdated()) {
+    return <DatabaseOutdated />;
+  }
   const user = await requireUser();
   const screen = readScreenState(await searchParams);
   const now = new Date();

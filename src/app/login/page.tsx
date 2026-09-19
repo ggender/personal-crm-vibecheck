@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { LoginForm } from "@/features/auth/components/login-form";
 import { getCurrentUser } from "@/features/auth/session";
+import { DatabaseOutdated } from "@/features/database/components/database-outdated";
+import { isDatabaseOutdated } from "@/features/database/status";
 
 export const metadata: Metadata = { title: "Вход — Личная CRM" };
 
@@ -19,6 +21,10 @@ function linkProblem(error: string | string[] | undefined): string | null {
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   // The session is checked on every request, never at build time.
   await connection();
+  // Before the session: its tables may be what the database lacks.
+  if (await isDatabaseOutdated()) {
+    return <DatabaseOutdated />;
+  }
   if (await getCurrentUser()) {
     redirect("/");
   }

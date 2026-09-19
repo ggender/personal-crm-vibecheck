@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
+import { E2E_DATABASE_URL } from "./e2e/database";
 import { DEMO_STATE } from "./e2e/login";
 
 // The scenarios get their own production build on their own port and their
@@ -28,7 +29,7 @@ export default defineConfig({
     command: `docker compose up -d --wait && npm run build && npm run db:reset && npm run start -- --port ${PORT}`,
     url: `http://localhost:${PORT}/login`,
     env: {
-      CRM_DATABASE_URL: "postgres://postgres@localhost:5433/crm_e2e",
+      CRM_DATABASE_URL: E2E_DATABASE_URL,
       // Login links in letters point at this server.
       BETTER_AUTH_URL: `http://localhost:${PORT}`,
       // A production build needs a key; a new one each run, kept nowhere.

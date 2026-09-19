@@ -1,4 +1,6 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { Client } from "pg";
+import { E2E_DATABASE_URL } from "./database";
 import { DEMO_STATE } from "./login";
 
 // Scenarios from specs/02-план-сборки.md, run in a real browser against the
@@ -27,6 +29,10 @@ function searchField(page: Page) {
 
 function cardHeading(page: Page, name: string) {
   return page.getByRole("heading", { name, level: 2 });
+}
+
+function outdatedHeading(page: Page) {
+  return page.getByRole("heading", { name: "База устарела" });
 }
 
 // "999 контактов" above the list when nothing is searched.
@@ -167,6 +173,48 @@ test.describe("bad day (plan, section 5.2)", () => {
     await listRows(page).first().getByRole("link").click();
     await expect(missing).toBeHidden();
     await expect(noteField(page)).toBeVisible();
+  });
+
+  test("a database behind the code asks for npm run db:migrate", async ({
+    page,
+    browser,
+  }) => {
+    const signedOut = await browser.newContext({
+      storageState: { cookies: [], origins: [] },
+    });
+    const loginPage = await signedOut.newPage();
+    const db = new Client({ connectionString: E2E_DATABASE_URL });
+    await db.connect();
+    // As if the newest migration had not been applied yet.
+    const {
+      rows: [removed],
+    } = await db.query<{ hash: string; created_at: string }>(
+      `DELETE FROM drizzle.__drizzle_migrations
+       WHERE created_at = (SELECT max(created_at) FROM drizzle.__drizzle_migrations)
+       RETURNING hash, created_at`,
+    );
+    try {
+      const response = await page.goto("/");
+      await expect(outdatedHeading(page)).toBeVisible();
+      await expect(page.getByText("npm run db:migrate")).toBeVisible();
+      // The app itself did not run: its queries would hit missing tables.
+      expect(await response?.text()).not.toContain("Список контактов");
+
+      // The login page asks too, before it looks for a session.
+      await loginPage.goto("/login");
+      await expect(outdatedHeading(loginPage)).toBeVisible();
+    } finally {
+      await signedOut.close();
+      await db.query(
+        "INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES ($1, $2)",
+        [removed.hash, removed.created_at],
+      );
+      await db.end();
+    }
+
+    await page.getByRole("button", { name: "Проверить снова" }).click();
+    await expect(contactList(page)).toBeVisible();
+    await expect(outdatedHeading(page)).toHaveCount(0);
   });
 
   test("an empty search offers to add the typed name", async ({ page }) => {

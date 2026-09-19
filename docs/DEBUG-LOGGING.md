@@ -38,7 +38,8 @@ Example: `LOG_LEVEL=debug npm run dev`. Tests run with `silent`.
 Name events `<thing>.<what_happened>` in past tense, snake_case after the dot:
 `contact.created`, `contact.updated`, `contact.deleted`, `contact.talked`, `note.added`, `note.deleted`,
 `note.rejected`, `note.add_failed`, `group.created`, `group.renamed`, `group.deleted`, `group.rejected`,
-`group.name_taken`, `group.missing`, `group.create_failed`, `db.pool_created`, `db.pool_error`, `db.created`, `db.migrated`, `page.load_failed`,
+`group.name_taken`, `group.missing`, `group.create_failed`, `db.pool_created`, `db.pool_error`, `db.created`, `db.migrated`, `db.outdated` (the database lacks migrations of the
+code; `pendingCount`), `page.load_failed`,
 `seed.done`, `seed.skipped`, `login_link.sent`, `login_link.send_failed`, `user.created`, `session.created`,
 `session.ended`, `session.missing` (an action came without a session), `session.check_failed`.
 
