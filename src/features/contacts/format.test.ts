@@ -213,6 +213,7 @@ describe("formatKeepInTouch", () => {
   });
 });
 
+// The rhythm itself is the select next to it in the card.
 describe("formatKeepInTouchStatus", () => {
   it("says it is time to write and how long it has been", () => {
     expect(
@@ -222,7 +223,7 @@ describe("formatKeepInTouchStatus", () => {
         daysLeft: 0,
         isDue: true,
       }),
-    ).toBe("Раз в месяц · пора написать: 45 дней без общения");
+    ).toBe("пора написать: 45 дней без общения");
   });
 
   it("says when the next time comes", () => {
@@ -233,7 +234,7 @@ describe("formatKeepInTouchStatus", () => {
         daysLeft: 18,
         isDue: false,
       }),
-    ).toBe("Раз в месяц · следующий раз через 18 дней");
+    ).toBe("следующий раз через 18 дней");
     expect(
       formatKeepInTouchStatus({
         days: 14,
@@ -241,7 +242,7 @@ describe("formatKeepInTouchStatus", () => {
         daysLeft: 1,
         isDue: false,
       }),
-    ).toBe("Раз в 2 недели · следующий раз через 1 день");
+    ).toBe("следующий раз через 1 день");
   });
 });
 

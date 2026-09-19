@@ -139,10 +139,10 @@ export function formatKeepInTouch(days: number | null): string {
   return KEEP_IN_TOUCH_LABELS[days] ?? `Раз в ${formatDayCount(days)}`;
 }
 
-// «Раз в месяц · пора написать: 45 дней без общения»
+// «пора написать: 45 дней без общения», shown after the rhythm select in
+// the card.
 export function formatKeepInTouchStatus(state: KeepInTouchState): string {
-  const rhythm = formatKeepInTouch(state.days);
   return state.isDue
-    ? `${rhythm} · пора написать: ${formatDayCount(state.daysSince)} без общения`
-    : `${rhythm} · следующий раз через ${formatDayCount(state.daysLeft)}`;
+    ? `пора написать: ${formatDayCount(state.daysSince)} без общения`
+    : `следующий раз через ${formatDayCount(state.daysLeft)}`;
 }

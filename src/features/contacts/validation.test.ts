@@ -3,6 +3,7 @@ import {
   KEEP_IN_TOUCH_DAYS,
   LIMITS,
   addNoteInput,
+  contactGroupInput,
   createContactInput,
   createGroupInput,
   deleteGroupInput,
@@ -10,6 +11,7 @@ import {
   firstIssueMessage,
   markTalkedInput,
   renameGroupInput,
+  setKeepInTouchDaysInput,
   updateContactInput,
 } from "./validation";
 
@@ -164,6 +166,39 @@ describe("keepInTouchDays", () => {
   });
 });
 
+describe("setKeepInTouchDaysInput", () => {
+  it("takes a rhythm from the list or «не следить»", () => {
+    expect(
+      setKeepInTouchDaysInput.parse({ contactId: 3, keepInTouchDays: 30 }),
+    ).toEqual({ contactId: 3, keepInTouchDays: 30 });
+    expect(
+      setKeepInTouchDaysInput.parse({ contactId: 3, keepInTouchDays: null }),
+    ).toEqual({ contactId: 3, keepInTouchDays: null });
+  });
+
+  it("refuses a rhythm outside the list or a missing one", () => {
+    for (const keepInTouchDays of [7, "30", undefined]) {
+      const result = setKeepInTouchDaysInput.safeParse({
+        contactId: 3,
+        keepInTouchDays,
+      });
+      expect(result.success).toBe(false);
+      expect(firstIssueMessage(result.error!)).toBe(
+        "Выбери из списка, как часто общаться",
+      );
+    }
+  });
+
+  it("requires a positive whole contact id", () => {
+    for (const contactId of [0, -1, 1.5, "3", null]) {
+      expect(
+        setKeepInTouchDaysInput.safeParse({ contactId, keepInTouchDays: 30 })
+          .success,
+      ).toBe(false);
+    }
+  });
+});
+
 describe("markTalkedInput", () => {
   it("requires a positive whole contact id", () => {
     expect(markTalkedInput.parse({ contactId: 3 })).toEqual({ contactId: 3 });
@@ -235,6 +270,28 @@ describe("group name", () => {
         renameGroupInput.safeParse({ groupId: 3, name: " " }).error!,
       ),
     ).toBe("Напиши название группы");
+  });
+});
+
+describe("contactGroupInput", () => {
+  it("takes a contact and one of its groups", () => {
+    expect(contactGroupInput.parse({ contactId: 3, groupId: 5 })).toEqual({
+      contactId: 3,
+      groupId: 5,
+    });
+  });
+
+  it("refuses anything but positive whole ids", () => {
+    for (const id of [0, -1, 1.5, "3", null]) {
+      expect(
+        contactGroupInput.safeParse({ contactId: id, groupId: 5 }).success,
+      ).toBe(false);
+      const result = contactGroupInput.safeParse({ contactId: 3, groupId: id });
+      expect(result.success).toBe(false);
+      expect(firstIssueMessage(result.error!)).toBe(
+        "Не удалось понять, какая это группа",
+      );
+    }
   });
 });
 

@@ -8,6 +8,7 @@ import * as groupsRepo from "./data/groups-repo";
 import * as notesRepo from "./data/notes-repo";
 import {
   addNoteInput,
+  contactGroupInput,
   createContactInput,
   createGroupInput,
   deleteContactInput,
@@ -17,6 +18,7 @@ import {
   firstIssueMessage,
   markTalkedInput,
   renameGroupInput,
+  setKeepInTouchDaysInput,
   updateContactInput,
 } from "./validation";
 
@@ -253,6 +255,61 @@ export async function markTalked(input: {
   }
 }
 
+// The rhythm alone, chosen right in the card.
+export async function setKeepInTouchDays(input: {
+  contactId: number;
+  keepInTouchDays: number | null;
+}): Promise<ActionResult> {
+  const parsed = setKeepInTouchDaysInput.safeParse(input);
+  if (!parsed.success) {
+    log.warn("contacts", "contact.rejected", {
+      contactId: idOf(input?.contactId),
+      issueCount: parsed.error.issues.length,
+    });
+    return {
+      ok: false,
+      error: firstIssueMessage(parsed.error),
+      canRetry: false,
+    };
+  }
+
+  const { contactId, keepInTouchDays } = parsed.data;
+  try {
+    const ownerId = await currentOwnerId();
+    if (ownerId === null) {
+      return signedOut();
+    }
+    const updated = await contactsRepo.setKeepInTouchDays(
+      ownerId,
+      contactId,
+      keepInTouchDays,
+    );
+    revalidatePath("/");
+    if (!updated) {
+      log.warn("contacts", "contact.missing", { contactId });
+      return {
+        ok: false,
+        error: "Такого контакта больше нет",
+        canRetry: false,
+      };
+    }
+    log.info("contacts", "contact.keep_in_touch_set", {
+      contactId,
+      keepInTouchDays,
+    });
+    return { ok: true };
+  } catch (error) {
+    log.error("contacts", "contact.keep_in_touch_failed", error, {
+      contactId,
+    });
+    return {
+      ok: false,
+      error: "Не удалось сохранить, как часто общаться",
+      canRetry: true,
+    };
+  }
+}
+
 // The notes of the contact go with it: the foreign key is ON DELETE CASCADE.
 export async function deleteContact(input: {
   contactId: number;
@@ -419,5 +476,116 @@ export async function deleteGroup(input: {
   } catch (error) {
     log.error("groups", "group.delete_failed", error, { groupId });
     return { ok: false, error: "Не удалось удалить группу", canRetry: true };
+  }
+}
+
+// One group from the card; the contact's other groups stay.
+export async function addContactToGroup(input: {
+  contactId: number;
+  groupId: number;
+}): Promise<ActionResult> {
+  const parsed = contactGroupInput.safeParse(input);
+  if (!parsed.success) {
+    log.warn("contacts", "contact.rejected", {
+      contactId: idOf(input?.contactId),
+      groupId: idOf(input?.groupId),
+      issueCount: parsed.error.issues.length,
+    });
+    return {
+      ok: false,
+      error: firstIssueMessage(parsed.error),
+      canRetry: false,
+    };
+  }
+
+  const { contactId, groupId } = parsed.data;
+  try {
+    const ownerId = await currentOwnerId();
+    if (ownerId === null) {
+      return signedOut();
+    }
+    const result = await contactsRepo.addContactToGroup(
+      ownerId,
+      contactId,
+      groupId,
+    );
+    revalidatePath("/");
+    if (result === "contact_missing") {
+      log.warn("contacts", "contact.missing", { contactId });
+      return {
+        ok: false,
+        error: "Такого контакта больше нет",
+        canRetry: false,
+      };
+    }
+    if (result === "group_missing") {
+      log.warn("groups", "group.missing", { groupId });
+      return GROUP_MISSING;
+    }
+    log.info("contacts", "contact.group_added", { contactId, groupId });
+    return { ok: true };
+  } catch (error) {
+    log.error("contacts", "contact.group_add_failed", error, {
+      contactId,
+      groupId,
+    });
+    return {
+      ok: false,
+      error: "Не удалось добавить в группу",
+      canRetry: true,
+    };
+  }
+}
+
+export async function removeContactFromGroup(input: {
+  contactId: number;
+  groupId: number;
+}): Promise<ActionResult> {
+  const parsed = contactGroupInput.safeParse(input);
+  if (!parsed.success) {
+    log.warn("contacts", "contact.rejected", {
+      contactId: idOf(input?.contactId),
+      groupId: idOf(input?.groupId),
+      issueCount: parsed.error.issues.length,
+    });
+    return {
+      ok: false,
+      error: firstIssueMessage(parsed.error),
+      canRetry: false,
+    };
+  }
+
+  const { contactId, groupId } = parsed.data;
+  try {
+    const ownerId = await currentOwnerId();
+    if (ownerId === null) {
+      return signedOut();
+    }
+    const removed = await contactsRepo.removeContactFromGroup(
+      ownerId,
+      contactId,
+      groupId,
+    );
+    revalidatePath("/");
+    if (!removed) {
+      log.warn("contacts", "contact.missing", { contactId });
+      return {
+        ok: false,
+        error: "Такого контакта больше нет",
+        canRetry: false,
+      };
+    }
+    log.info("contacts", "contact.group_removed", { contactId, groupId });
+    return { ok: true };
+  } catch (error) {
+    log.error("contacts", "contact.group_remove_failed", error, {
+      contactId,
+      groupId,
+    });
+    return {
+      ok: false,
+      error: "Не удалось убрать из группы",
+      canRetry: true,
+    };
   }
 }

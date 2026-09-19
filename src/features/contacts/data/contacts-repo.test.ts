@@ -3,16 +3,19 @@ import { eq } from "drizzle-orm";
 import { contacts, notes } from "@/db/schema";
 import { createTestDb, createTestUser, type TestDb } from "@/db/test-db";
 import {
+  addContactToGroup,
   countContacts,
   createContact,
   deleteContact,
   getContact,
   listKeepInTouch,
   markTalked,
+  removeContactFromGroup,
   searchContacts,
+  setKeepInTouchDays,
   updateContact,
 } from "./contacts-repo";
-import { createGroup, listContactGroups } from "./groups-repo";
+import { createGroup, deleteGroup, listContactGroups } from "./groups-repo";
 import { addNote, listNotes } from "./notes-repo";
 
 let db: TestDb;
@@ -271,6 +274,47 @@ describe("markTalked", () => {
   });
 });
 
+describe("setKeepInTouchDays", () => {
+  it("changes only the rhythm and the change date", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-01T10:00:00Z"));
+    const id = await createContact(
+      owner,
+      { name: "Марк", metContext: "Митап", phone: "+7 900" },
+      db,
+    );
+
+    vi.setSystemTime(new Date("2026-09-17T10:00:00Z"));
+    expect(await setKeepInTouchDays(owner, id, 30, db)).toBe(true);
+
+    expect(await getContact(owner, id, db)).toMatchObject({
+      name: "Марк",
+      metContext: "Митап",
+      phone: "+7 900",
+      keepInTouchDays: 30,
+      talkedAt: null,
+      createdAt: new Date("2026-09-01T10:00:00Z"),
+      updatedAt: new Date("2026-09-17T10:00:00Z"),
+    });
+  });
+
+  it("stops keeping in touch with null", async () => {
+    const id = await createContact(
+      owner,
+      { name: "Марк", keepInTouchDays: 14 },
+      db,
+    );
+
+    expect(await setKeepInTouchDays(owner, id, null, db)).toBe(true);
+
+    expect((await getContact(owner, id, db))?.keepInTouchDays).toBeNull();
+  });
+
+  it("returns false for a missing contact", async () => {
+    expect(await setKeepInTouchDays(owner, 12345, 30, db)).toBe(false);
+  });
+});
+
 describe("listKeepInTouch", () => {
   it("returns only contacts with a rhythm, with the times the rules need", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
@@ -391,11 +435,13 @@ describe("another owner's contacts", () => {
     expect(await updateContact(owner, theirs, { name: "Взлом" }, db)).toBe(
       false,
     );
+    expect(await setKeepInTouchDays(owner, theirs, null, db)).toBe(false);
     expect(await markTalked(owner, theirs, db)).toBe(false);
     expect(await deleteContact(owner, theirs, db)).toBe(false);
 
     expect(await getContact(stranger, theirs, db)).toMatchObject({
       name: "Анна Чужая",
+      keepInTouchDays: 14,
       talkedAt: null,
     });
     expect(await listNotes(stranger, theirs, db)).toHaveLength(1);
@@ -479,6 +525,85 @@ describe("groups of a contact", () => {
         db,
       ),
     ).toBe(false);
+
+    expect(
+      (await listContactGroups(stranger, theirs, db)).map((group) => group.id),
+    ).toEqual([theirGroup]);
+  });
+
+  it("get one more group from the card", async () => {
+    const id = await createContact(
+      owner,
+      { name: "Анна", groupIds: [work] },
+      db,
+    );
+
+    expect(await addContactToGroup(owner, id, friends, db)).toBe("added");
+
+    expect(await groupsOf(id)).toEqual(["Друзья", "Работа"]);
+  });
+
+  it("do not mind the same group added twice", async () => {
+    const id = await createContact(
+      owner,
+      { name: "Анна", groupIds: [work] },
+      db,
+    );
+
+    expect(await addContactToGroup(owner, id, work, db)).toBe("added");
+
+    expect(await groupsOf(id)).toEqual(["Работа"]);
+  });
+
+  it("lose one group from the card, the others stay", async () => {
+    const id = await createContact(
+      owner,
+      { name: "Анна", groupIds: [work, friends] },
+      db,
+    );
+
+    expect(await removeContactFromGroup(owner, id, work, db)).toBe(true);
+    expect(await groupsOf(id)).toEqual(["Друзья"]);
+    // Not in the group any more: nothing to do, and that is fine.
+    expect(await removeContactFromGroup(owner, id, work, db)).toBe(true);
+    expect(await groupsOf(id)).toEqual(["Друзья"]);
+  });
+
+  it("say which is gone when adding: the contact or the group", async () => {
+    const id = await createContact(owner, { name: "Анна" }, db);
+    const theirs = (await createGroup(stranger, "Чужая", db))!.id;
+    await deleteGroup(owner, friends, db);
+
+    expect(await addContactToGroup(owner, 12345, work, db)).toBe(
+      "contact_missing",
+    );
+    expect(await addContactToGroup(owner, id, friends, db)).toBe(
+      "group_missing",
+    );
+    expect(await addContactToGroup(owner, id, theirs, db)).toBe(
+      "group_missing",
+    );
+    expect(await removeContactFromGroup(owner, 12345, work, db)).toBe(false);
+    expect(await groupsOf(id)).toEqual([]);
+  });
+
+  it("of someone else's contact cannot be added to or taken from", async () => {
+    const theirGroup = (await createGroup(stranger, "Чужая", db))!.id;
+    const theirs = await createContact(
+      stranger,
+      { name: "Анна Чужая", groupIds: [theirGroup] },
+      db,
+    );
+
+    expect(await addContactToGroup(owner, theirs, work, db)).toBe(
+      "contact_missing",
+    );
+    expect(await addContactToGroup(owner, theirs, theirGroup, db)).toBe(
+      "contact_missing",
+    );
+    expect(await removeContactFromGroup(owner, theirs, theirGroup, db)).toBe(
+      false,
+    );
 
     expect(
       (await listContactGroups(stranger, theirs, db)).map((group) => group.id),

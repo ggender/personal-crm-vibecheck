@@ -7,13 +7,14 @@ import type { Group } from "../data/groups-repo";
 import type { Note } from "../data/notes-repo";
 import {
   deleteContactQuestion,
-  formatKeepInTouch,
   formatKeepInTouchStatus,
   formatTodayLabel,
 } from "../format";
 import type { KeepInTouchState } from "../keep-in-touch";
 import { screenHref } from "../screen-url";
+import { ContactGroupChips } from "./contact-group-chips";
 import { DeleteContactButton } from "./delete-dialogs";
+import { KeepInTouchSelect } from "./keep-in-touch-select";
 import { MarkTalkedButton } from "./mark-talked-button";
 import { NoteForm } from "./note-form";
 import { NotesFeed } from "./notes-feed";
@@ -21,7 +22,10 @@ import { NotesFeed } from "./notes-feed";
 type ContactCardProps = {
   contact: Contact;
   notes: Note[];
+  // The contact's groups.
   groups: Group[];
+  // All groups of the owner, to add the contact to.
+  allGroups: Group[];
   // null when nobody keeps in touch with this contact on a rhythm.
   keepInTouch: KeepInTouchState | null;
   now: Date;
@@ -48,6 +52,7 @@ export function ContactCard({
   contact,
   notes,
   groups,
+  allGroups,
   keepInTouch,
   now,
   query,
@@ -65,21 +70,32 @@ export function ContactCard({
       >
         {contact.name}
       </h2>
-      {keepInTouch && (
-        <div className="-mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <p
-            aria-live="polite"
-            className={
-              keepInTouch.isDue
-                ? "text-sm font-medium"
-                : "text-sm text-muted-foreground"
-            }
-          >
-            {formatKeepInTouchStatus(keepInTouch)}
-          </p>
+      {/* «[Раз в месяц ▾] · пора написать: 45 дней без общения [Пообщались]» */}
+      <div className="-mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <KeepInTouchSelect
+          key={contact.id}
+          contactId={contact.id}
+          keepInTouchDays={contact.keepInTouchDays}
+        />
+        <p
+          aria-live="polite"
+          className={
+            keepInTouch?.isDue
+              ? "text-sm font-medium"
+              : "text-sm text-muted-foreground"
+          }
+        >
+          {keepInTouch && (
+            <>
+              <span aria-hidden>· </span>
+              {formatKeepInTouchStatus(keepInTouch)}
+            </>
+          )}
+        </p>
+        {keepInTouch && (
           <MarkTalkedButton key={contact.id} contactId={contact.id} />
-        </div>
-      )}
+        )}
+      </div>
       <NoteForm
         key={contact.id}
         contactId={contact.id}
@@ -91,11 +107,12 @@ export function ContactCard({
           {contact.metContext || <NotSet />}
         </Detail>
         <Detail label="Группы">
-          {groups.length > 0 ? (
-            groups.map((group) => group.name).join(", ")
-          ) : (
-            <span className="text-muted-foreground">без группы</span>
-          )}
+          <ContactGroupChips
+            key={contact.id}
+            contactId={contact.id}
+            contactGroupIds={groups.map((group) => group.id)}
+            groups={allGroups}
+          />
         </Detail>
         <Detail label="Телефон">
           {contact.phone ? (
@@ -119,15 +136,6 @@ export function ContactCard({
             </a>
           ) : (
             <NotSet />
-          )}
-        </Detail>
-        <Detail label="Как часто общаться">
-          {contact.keepInTouchDays === null ? (
-            <span className="text-muted-foreground">
-              {formatKeepInTouch(null)}
-            </span>
-          ) : (
-            formatKeepInTouch(contact.keepInTouchDays)
           )}
         </Detail>
       </dl>

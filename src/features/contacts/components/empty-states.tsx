@@ -47,8 +47,7 @@ export function NoOneDue() {
     <div className="px-4 py-8 text-center">
       <p className="font-medium">Сейчас никому не пора писать</p>
       <p className="mt-1 text-sm text-muted-foreground">
-        Как часто общаться с человеком, задаётся в его карточке: «Изменить» →
-        «Как часто общаться».
+        Как часто общаться с человеком, выбирается в его карточке, под именем.
       </p>
     </div>
   );

@@ -45,6 +45,19 @@ export const deleteContactInput = z.object({ contactId });
 
 export const markTalkedInput = z.object({ contactId });
 
+// null means "не следить".
+const keepInTouchDays = z
+  .literal(KEEP_IN_TOUCH_DAYS, {
+    error: "Выбери из списка, как часто общаться",
+  })
+  .nullable();
+
+// The rhythm alone, chosen right in the card.
+export const setKeepInTouchDaysInput = z.object({ contactId, keepInTouchDays });
+
+// One group added to or taken from a contact in the card.
+export const contactGroupInput = z.object({ contactId, groupId });
+
 const groupName = z
   .string({ error: "Напиши название группы" })
   .trim()
@@ -81,13 +94,7 @@ const contactFields = {
     (value) => value === "" || value.includes("@"),
     { error: "В почте должен быть знак @" },
   ),
-  // null means "не следить".
-  keepInTouchDays: z
-    .literal(KEEP_IN_TOUCH_DAYS, {
-      error: "Выбери из списка, как часто общаться",
-    })
-    .nullable()
-    .default(null),
+  keepInTouchDays: keepInTouchDays.default(null),
   // The groups ticked in the form; none when not given.
   groupIds: z
     .array(groupId, { error: "Не удалось понять, какая это группа" })

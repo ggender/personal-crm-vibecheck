@@ -170,6 +170,7 @@ export default async function HomePage({ searchParams }: PageProps<"/">) {
         contact={card.contact}
         notes={card.notes}
         groups={card.groups}
+        allGroups={groups}
         keepInTouch={card.keepInTouch}
         now={now}
         query={screen.q}

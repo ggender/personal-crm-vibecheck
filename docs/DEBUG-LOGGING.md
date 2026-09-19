@@ -24,19 +24,20 @@ Example: `LOG_LEVEL=debug npm run dev`. Tests run with `silent`.
 
 ## Categories
 
-| Category   | What                                                             |
-| ---------- | ---------------------------------------------------------------- |
-| `contacts` | list, search, create, update, delete contacts, mark talked       |
-| `notes`    | add and delete notes                                             |
-| `groups`   | create, rename and delete groups                                 |
-| `auth`     | login letters, sign-ups, sessions, Better Auth's own messages    |
-| `db`       | connections, creating the database, migrations, page load errors |
-| `seed`     | seed and reset scripts                                           |
+| Category   | What                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------- |
+| `contacts` | list, search, create, update, delete contacts, mark talked, rhythm and groups from the card |
+| `notes`    | add and delete notes                                                                        |
+| `groups`   | create, rename and delete groups                                                            |
+| `auth`     | login letters, sign-ups, sessions, Better Auth's own messages                               |
+| `db`       | connections, creating the database, migrations, page load errors                            |
+| `seed`     | seed and reset scripts                                                                      |
 
 ## Events
 
 Name events `<thing>.<what_happened>` in past tense, snake_case after the dot:
-`contact.created`, `contact.updated`, `contact.deleted`, `contact.talked`, `note.added`, `note.deleted`,
+`contact.created`, `contact.updated`, `contact.deleted`, `contact.talked`, `contact.keep_in_touch_set` (the rhythm chosen
+in the card; `keepInTouchDays`), `contact.group_added`, `contact.group_removed` (one group changed in the card), `note.added`, `note.deleted`,
 `note.rejected`, `note.add_failed`, `group.created`, `group.renamed`, `group.deleted`, `group.rejected`,
 `group.name_taken`, `group.missing`, `group.create_failed`, `db.pool_created`, `db.pool_error`, `db.created`, `db.migrated`, `db.outdated` (the database lacks migrations of the
 code; `pendingCount`), `page.load_failed`,

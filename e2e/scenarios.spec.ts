@@ -304,7 +304,7 @@ test.describe("keep in touch (specs/04-keep-in-touch.md)", () => {
     // Talked without a note.
     const talkedId = await openFirstRow(page);
     await expect(page.getByText(/пора написать: \d+ д/)).toBeVisible();
-    await page.getByRole("button", { name: "Пообщались" }).click();
+    await page.getByRole("button", { name: "Пообщались", exact: true }).click();
     await expect(page.getByText(/следующий раз через \d+ д/)).toBeVisible();
     await expect.poll(() => readDueCount(page)).toBe(before - 1);
     await expect(
@@ -331,7 +331,7 @@ test.describe("keep in touch (specs/04-keep-in-touch.md)", () => {
     await page.goto("/?due=1");
     await openFirstRow(page);
     await page.route("**/*", dropServerFunctions);
-    await page.getByRole("button", { name: "Пообщались" }).click();
+    await page.getByRole("button", { name: "Пообщались", exact: true }).click();
     await expect(
       page.getByText("Не удалось отметить: приложение не отвечает"),
     ).toBeVisible();
@@ -355,18 +355,130 @@ test.describe("keep in touch (specs/04-keep-in-touch.md)", () => {
     await rhythm.selectOption({ label: "Раз в 2 недели" });
     await page.getByRole("button", { name: "Добавить", exact: true }).click();
     await expect(cardHeading(page, name)).toBeVisible();
-    await expect(
-      page.getByText("Раз в 2 недели · следующий раз через 14 дней"),
-    ).toBeVisible();
+    // The card shows the rhythm in its own select.
+    await expect(rhythm).toHaveValue("14");
+    await expect(page.getByText("следующий раз через 14 дней")).toBeVisible();
 
     await page.getByRole("link", { name: "Изменить" }).click();
     await expect(rhythm).toHaveValue("14");
     await rhythm.selectOption({ label: "Не следить" });
     await page.getByRole("button", { name: "Сохранить", exact: true }).click();
     await expect(cardHeading(page, name)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Пообщались" })).toHaveCount(
-      0,
+    await expect(
+      page.getByRole("button", { name: "Пообщались", exact: true }),
+    ).toHaveCount(0);
+  });
+
+  function rowTalkedButton(page: Page) {
+    return page.getByRole("button", { name: /^Пообщались: / });
+  }
+
+  test("«Пообщались» in a row takes the contact off the list without opening it", async ({
+    page,
+  }) => {
+    await page.goto("/?due=1");
+    const before = await readDueCount(page);
+    expect(before).toBeGreaterThanOrEqual(2);
+    const rows = listRows(page);
+    const firstId = await rows
+      .first()
+      .getByRole("link")
+      .getAttribute("data-contact-id");
+    const secondId = await rows
+      .nth(1)
+      .getByRole("link")
+      .getAttribute("data-contact-id");
+
+    // From the keyboard: the focus moves on to the next row's button.
+    await rowTalkedButton(page).first().focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      contactList(page).locator(`[data-contact-id="${firstId}"]`),
+    ).toHaveCount(0);
+    await expect.poll(() => readDueCount(page)).toBe(before - 1);
+    await expect(rows.first().getByRole("link")).toHaveAttribute(
+      "data-contact-id",
+      secondId ?? "",
     );
+    await expect(rows.first().getByRole("button")).toBeFocused();
+    // No card was opened on the way.
+    expect(openContactId(page)).toBeNull();
+    expect(new URL(page.url()).searchParams.get("due")).toBe("1");
+  });
+
+  test("a «Пообщались» in a row that failed to save says so and works on retry", async ({
+    page,
+  }) => {
+    await page.goto("/?due=1");
+    const row = listRows(page).first();
+    const id = await row.getByRole("link").getAttribute("data-contact-id");
+    await page.route("**/*", dropServerFunctions);
+    await row.getByRole("button").click();
+    await expect(
+      row.getByText("Не удалось отметить: приложение не отвечает"),
+    ).toBeVisible();
+    await expect(row.getByRole("link")).toHaveAttribute(
+      "data-contact-id",
+      id ?? "",
+    );
+
+    await page.unroute("**/*", dropServerFunctions);
+    await row.getByRole("button", { name: "Повторить" }).click();
+    await expect(
+      contactList(page).locator(`[data-contact-id="${id}"]`),
+    ).toHaveCount(0);
+  });
+
+  test("the rhythm is changed right in the card, without «Изменить»", async ({
+    page,
+  }) => {
+    const rhythm = page.getByLabel("Как часто общаться");
+    const talked = page.getByRole("button", {
+      name: "Пообщались",
+      exact: true,
+    });
+
+    await page.goto("/");
+    await addContact(page, { name: "Нина Ритмова" });
+    await expect(rhythm).toHaveValue("");
+    await expect(talked).toHaveCount(0);
+
+    await rhythm.selectOption({ label: "Раз в месяц" });
+    await expect(page.getByText("следующий раз через 30 дней")).toBeVisible();
+    await expect(talked).toBeVisible();
+    // Saved, not just shown.
+    await page.reload();
+    await expect(rhythm).toHaveValue("30");
+
+    await rhythm.selectOption({ label: "Не следить" });
+    await expect(talked).toHaveCount(0);
+    await expect(page.getByText(/следующий раз через/)).toHaveCount(0);
+    await page.reload();
+    await expect(rhythm).toHaveValue("");
+  });
+
+  test("a rhythm that failed to save in the card says so and saves on retry", async ({
+    page,
+  }) => {
+    const rhythm = page.getByLabel("Как часто общаться");
+
+    await page.goto("/");
+    await addContact(page, { name: "Глеб Ритмов" });
+    await page.route("**/*", dropServerFunctions);
+    await rhythm.selectOption({ label: "Раз в год" });
+    await expect(
+      page.getByText(
+        "Не удалось сохранить, как часто общаться: приложение не отвечает",
+      ),
+    ).toBeVisible();
+    // The select shows what is really saved.
+    await expect(rhythm).toHaveValue("");
+
+    await page.unroute("**/*", dropServerFunctions);
+    await page.getByRole("button", { name: "Повторить" }).click();
+    await expect(page.getByText("следующий раз через 365 дней")).toBeVisible();
+    await expect(rhythm).toHaveValue("365");
+    await expect(page.getByText("Не удалось сохранить")).toBeHidden();
   });
 
   test("the search works inside the list and can widen to everyone", async ({
@@ -407,6 +519,15 @@ test.describe("groups (specs/06-группы.md)", () => {
 
   function newGroupField(page: Page) {
     return page.getByLabel("Новая группа");
+  }
+
+  // The × on a group of the open card.
+  function removeFromGroup(page: Page, name: string) {
+    return page.getByRole("button", { name: `Убрать из группы «${name}»` });
+  }
+
+  function addToGroup(page: Page) {
+    return page.getByLabel("Добавить в группу");
   }
 
   test("a group is created, renamed and deleted in the groups panel", async ({
@@ -476,7 +597,8 @@ test.describe("groups (specs/06-группы.md)", () => {
     await page.getByRole("checkbox", { name: "Друзья", exact: true }).check();
     await page.getByRole("button", { name: "Добавить", exact: true }).click();
     await expect(cardHeading(page, name)).toBeVisible();
-    await expect(page.getByText(`Друзья, ${group}`)).toBeVisible();
+    await expect(removeFromGroup(page, "Друзья")).toBeVisible();
+    await expect(removeFromGroup(page, group)).toBeVisible();
     const cardUrl = page.url();
 
     // One group: only its people, and the open card stays.
@@ -513,6 +635,59 @@ test.describe("groups (specs/06-группы.md)", () => {
     await expect(
       contactList(page).getByText(`В группе «${group}» пока никого`),
     ).toBeVisible();
+  });
+
+  test("a contact joins and leaves groups right in the card", async ({
+    page,
+  }) => {
+    const name = "Олег Карточкин";
+
+    await page.goto("/");
+    await addContact(page, { name });
+    const card = page.getByRole("region", { name: "Карточка контакта" });
+    await expect(card.getByText("без группы")).toBeVisible();
+
+    await addToGroup(page).selectOption({ label: "Друзья" });
+    await expect(removeFromGroup(page, "Друзья")).toBeVisible();
+    await expect(addToGroup(page)).toHaveValue("");
+    await addToGroup(page).selectOption({ label: "Спорт" });
+    await expect(removeFromGroup(page, "Спорт")).toBeVisible();
+    await expect(card.getByText("без группы")).toHaveCount(0);
+
+    // Saved: still there after a reload, and the group finds him.
+    await page.reload();
+    await expect(removeFromGroup(page, "Друзья")).toBeVisible();
+    await groupChip(page, "Спорт").click();
+    await searchField(page).fill("карточкин");
+    await expect(listRows(page)).toHaveCount(1);
+
+    // Out of one group, the other stays; the card stays open.
+    await removeFromGroup(page, "Спорт").click();
+    await expect(removeFromGroup(page, "Спорт")).toHaveCount(0);
+    await expect(addToGroup(page)).toBeFocused();
+    await expect(
+      contactList(page).getByText("В группе «Спорт» никого не нашлось"),
+    ).toBeVisible();
+    await expect(removeFromGroup(page, "Друзья")).toBeVisible();
+    await expect(cardHeading(page, name)).toBeVisible();
+  });
+
+  test("a group that failed to be added in the card says so and is added on retry", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await addContact(page, { name: "Ян Групповой" });
+    await page.route("**/*", dropServerFunctions);
+    await addToGroup(page).selectOption({ label: "Друзья" });
+    await expect(
+      page.getByText("Не удалось добавить в группу: приложение не отвечает"),
+    ).toBeVisible();
+    await expect(removeFromGroup(page, "Друзья")).toHaveCount(0);
+
+    await page.unroute("**/*", dropServerFunctions);
+    await page.getByRole("button", { name: "Повторить" }).click();
+    await expect(removeFromGroup(page, "Друзья")).toBeVisible();
+    await expect(page.getByText("Не удалось добавить в группу")).toBeHidden();
   });
 
   test("«+» inside a group starts the new contact in that group", async ({

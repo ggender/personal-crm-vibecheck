@@ -50,6 +50,8 @@ export type ContactFields = {
   groupIds?: number[];
 };
 
+export type AddToGroupResult = "added" | "contact_missing" | "group_missing";
+
 // Which contacts the list shows: everyone (null), the contacts of one
 // group, or the contacts without any group ("none").
 export type GroupFilter = number | "none" | null;
@@ -282,6 +284,75 @@ export async function updateContact(
     if (fields.groupIds !== undefined) {
       await replaceGroups(ownerId, id, fields.groupIds, tx);
     }
+    return true;
+  });
+}
+
+// The rhythm alone, chosen right in the card: an edit like the form's.
+export async function setKeepInTouchDays(
+  ownerId: number,
+  id: number,
+  keepInTouchDays: number | null,
+  db: Db = getDb(),
+): Promise<boolean> {
+  const updated = await db
+    .update(contacts)
+    .set({ keepInTouchDays, updatedAt: new Date() })
+    .where(isOwned(ownerId, id))
+    .returning({ id: contacts.id });
+  return updated.length > 0;
+}
+
+// One group from the card. Adding a group the contact is already in is fine.
+export async function addContactToGroup(
+  ownerId: number,
+  contactId: number,
+  groupId: number,
+  db: Db = getDb(),
+): Promise<AddToGroupResult> {
+  return db.transaction(async (tx) => {
+    const [contact] = await tx
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(isOwned(ownerId, contactId));
+    if (!contact) {
+      return "contact_missing";
+    }
+    const [group] = await tx
+      .select({ id: groups.id })
+      .from(groups)
+      .where(and(eq(groups.ownerId, ownerId), eq(groups.id, groupId)));
+    if (!group) {
+      return "group_missing";
+    }
+    await tx.insert(contactGroups).values({ contactId, groupId }).onConflictDoNothing();
+    return "added";
+  });
+}
+
+// False only when the contact is gone; a group it is not in is fine.
+export async function removeContactFromGroup(
+  ownerId: number,
+  contactId: number,
+  groupId: number,
+  db: Db = getDb(),
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const [contact] = await tx
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(isOwned(ownerId, contactId));
+    if (!contact) {
+      return false;
+    }
+    await tx
+      .delete(contactGroups)
+      .where(
+        and(
+          eq(contactGroups.contactId, contactId),
+          eq(contactGroups.groupId, groupId),
+        ),
+      );
     return true;
   });
 }

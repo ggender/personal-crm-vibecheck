@@ -11,6 +11,9 @@ vi.mock("./data/contacts-repo", () => ({
   updateContact: vi.fn(),
   deleteContact: vi.fn(),
   markTalked: vi.fn(),
+  setKeepInTouchDays: vi.fn(),
+  addContactToGroup: vi.fn(),
+  removeContactFromGroup: vi.fn(),
 }));
 vi.mock("./data/groups-repo", () => ({
   createGroup: vi.fn(),
@@ -30,6 +33,9 @@ const {
   deleteNote,
   deleteContact,
   markTalked,
+  setKeepInTouchDays,
+  addContactToGroup,
+  removeContactFromGroup,
   createGroup,
   renameGroup,
   deleteGroup,
@@ -335,6 +341,170 @@ describe("markTalked action", () => {
   });
 });
 
+describe("setKeepInTouchDays action", () => {
+  it("saves the rhythm and refreshes the page", async () => {
+    vi.mocked(contactsRepo.setKeepInTouchDays).mockResolvedValue(true);
+
+    expect(
+      await setKeepInTouchDays({ contactId: 9, keepInTouchDays: 30 }),
+    ).toEqual({ ok: true });
+    expect(contactsRepo.setKeepInTouchDays).toHaveBeenCalledWith(OWNER, 9, 30);
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("stops keeping in touch", async () => {
+    vi.mocked(contactsRepo.setKeepInTouchDays).mockResolvedValue(true);
+
+    expect(
+      await setKeepInTouchDays({ contactId: 9, keepInTouchDays: null }),
+    ).toEqual({ ok: true });
+    expect(contactsRepo.setKeepInTouchDays).toHaveBeenCalledWith(
+      OWNER,
+      9,
+      null,
+    );
+  });
+
+  it("refuses a rhythm outside the list without touching the database", async () => {
+    expect(
+      await setKeepInTouchDays({ contactId: 9, keepInTouchDays: 7 }),
+    ).toEqual({
+      ok: false,
+      error: "Выбери из списка, как часто общаться",
+      canRetry: false,
+    });
+    expect(contactsRepo.setKeepInTouchDays).not.toHaveBeenCalled();
+  });
+
+  it("says when the contact is gone", async () => {
+    vi.mocked(contactsRepo.setKeepInTouchDays).mockResolvedValue(false);
+
+    expect(
+      await setKeepInTouchDays({ contactId: 9, keepInTouchDays: 30 }),
+    ).toEqual({
+      ok: false,
+      error: "Такого контакта больше нет",
+      canRetry: false,
+    });
+  });
+
+  it("turns an unexpected failure into a retryable message", async () => {
+    vi.mocked(contactsRepo.setKeepInTouchDays).mockRejectedValue(
+      new Error("locked"),
+    );
+
+    expect(
+      await setKeepInTouchDays({ contactId: 9, keepInTouchDays: 30 }),
+    ).toEqual({
+      ok: false,
+      error: "Не удалось сохранить, как часто общаться",
+      canRetry: true,
+    });
+  });
+});
+
+describe("addContactToGroup action", () => {
+  it("adds the contact to the group and refreshes the page", async () => {
+    vi.mocked(contactsRepo.addContactToGroup).mockResolvedValue("added");
+
+    expect(await addContactToGroup({ contactId: 9, groupId: 4 })).toEqual({
+      ok: true,
+    });
+    expect(contactsRepo.addContactToGroup).toHaveBeenCalledWith(OWNER, 9, 4);
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("says when the contact is gone", async () => {
+    vi.mocked(contactsRepo.addContactToGroup).mockResolvedValue(
+      "contact_missing",
+    );
+
+    expect(await addContactToGroup({ contactId: 9, groupId: 4 })).toEqual({
+      ok: false,
+      error: "Такого контакта больше нет",
+      canRetry: false,
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("says when the group is gone", async () => {
+    vi.mocked(contactsRepo.addContactToGroup).mockResolvedValue(
+      "group_missing",
+    );
+
+    expect(await addContactToGroup({ contactId: 9, groupId: 4 })).toEqual({
+      ok: false,
+      error: "Такой группы больше нет",
+      canRetry: false,
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("refuses a broken id without touching the database", async () => {
+    expect(await addContactToGroup({ contactId: 9, groupId: 0 })).toMatchObject(
+      { ok: false },
+    );
+    expect(contactsRepo.addContactToGroup).not.toHaveBeenCalled();
+  });
+
+  it("turns an unexpected failure into a retryable message", async () => {
+    vi.mocked(contactsRepo.addContactToGroup).mockRejectedValue(
+      new Error("locked"),
+    );
+
+    expect(await addContactToGroup({ contactId: 9, groupId: 4 })).toEqual({
+      ok: false,
+      error: "Не удалось добавить в группу",
+      canRetry: true,
+    });
+  });
+});
+
+describe("removeContactFromGroup action", () => {
+  it("takes the contact out of the group and refreshes the page", async () => {
+    vi.mocked(contactsRepo.removeContactFromGroup).mockResolvedValue(true);
+
+    expect(await removeContactFromGroup({ contactId: 9, groupId: 4 })).toEqual({
+      ok: true,
+    });
+    expect(contactsRepo.removeContactFromGroup).toHaveBeenCalledWith(
+      OWNER,
+      9,
+      4,
+    );
+    expect(revalidatePath).toHaveBeenCalledWith("/");
+  });
+
+  it("says when the contact is gone", async () => {
+    vi.mocked(contactsRepo.removeContactFromGroup).mockResolvedValue(false);
+
+    expect(await removeContactFromGroup({ contactId: 9, groupId: 4 })).toEqual({
+      ok: false,
+      error: "Такого контакта больше нет",
+      canRetry: false,
+    });
+  });
+
+  it("refuses a broken id without touching the database", async () => {
+    expect(
+      await removeContactFromGroup({ contactId: -1, groupId: 4 }),
+    ).toMatchObject({ ok: false });
+    expect(contactsRepo.removeContactFromGroup).not.toHaveBeenCalled();
+  });
+
+  it("turns an unexpected failure into a retryable message", async () => {
+    vi.mocked(contactsRepo.removeContactFromGroup).mockRejectedValue(
+      new Error("locked"),
+    );
+
+    expect(await removeContactFromGroup({ contactId: 9, groupId: 4 })).toEqual({
+      ok: false,
+      error: "Не удалось убрать из группы",
+      canRetry: true,
+    });
+  });
+});
+
 describe("createGroup action", () => {
   it("creates the group and refreshes the page", async () => {
     vi.mocked(groupsRepo.createGroup).mockResolvedValue({
@@ -484,6 +654,15 @@ describe("without a session", () => {
     expect(await deleteNote({ noteId: 5 })).toEqual(signedOut);
     expect(await deleteContact({ contactId: 9 })).toEqual(signedOut);
     expect(await markTalked({ contactId: 9 })).toEqual(signedOut);
+    expect(
+      await setKeepInTouchDays({ contactId: 9, keepInTouchDays: 30 }),
+    ).toEqual(signedOut);
+    expect(await addContactToGroup({ contactId: 9, groupId: 4 })).toEqual(
+      signedOut,
+    );
+    expect(await removeContactFromGroup({ contactId: 9, groupId: 4 })).toEqual(
+      signedOut,
+    );
     expect(await createGroup({ name: "Работа" })).toEqual(signedOut);
     expect(await renameGroup({ groupId: 4, name: "Работа" })).toEqual(
       signedOut,
@@ -497,6 +676,9 @@ describe("without a session", () => {
       contactsRepo.updateContact,
       contactsRepo.deleteContact,
       contactsRepo.markTalked,
+      contactsRepo.setKeepInTouchDays,
+      contactsRepo.addContactToGroup,
+      contactsRepo.removeContactFromGroup,
       groupsRepo.createGroup,
       groupsRepo.renameGroup,
       groupsRepo.deleteGroup,
@@ -587,6 +769,12 @@ describe("action logs", () => {
     await markTalked({ contactId: 7 });
     await markTalked({ contactId: 7 });
 
+    vi.mocked(contactsRepo.setKeepInTouchDays)
+      .mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(queryError);
+    await setKeepInTouchDays({ contactId: 7, keepInTouchDays: 30 });
+    await setKeepInTouchDays({ contactId: 7, keepInTouchDays: 30 });
+
     vi.mocked(getCurrentUser).mockResolvedValueOnce(null);
     await addNote({ contactId: 7, body: note });
 
@@ -605,6 +793,8 @@ describe("action logs", () => {
       "note.rejected",
       "contact.talked",
       "contact.talk_failed",
+      "contact.keep_in_touch_set",
+      "contact.keep_in_touch_failed",
       "session.missing",
     ]) {
       expect(output).toContain(event);
@@ -657,8 +847,29 @@ describe("action logs", () => {
     vi.mocked(contactsRepo.createContact).mockResolvedValueOnce(1000);
     await createContact({ name: "Марк", groupIds: [4, 5] });
 
+    vi.mocked(contactsRepo.addContactToGroup)
+      .mockResolvedValueOnce("added")
+      .mockResolvedValueOnce("contact_missing")
+      .mockResolvedValueOnce("group_missing")
+      .mockRejectedValueOnce(queryError);
+    for (let i = 0; i < 4; i++) {
+      await addContactToGroup({ contactId: 7, groupId: 4 });
+    }
+    await addContactToGroup({ contactId: 7, groupId: 0 });
+
+    vi.mocked(contactsRepo.removeContactFromGroup)
+      .mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(queryError);
+    await removeContactFromGroup({ contactId: 7, groupId: 4 });
+    await removeContactFromGroup({ contactId: 7, groupId: 4 });
+
     const output = lines.join("\n");
     for (const event of [
+      "contact.group_added",
+      "contact.group_add_failed",
+      "contact.group_removed",
+      "contact.group_remove_failed",
+      "contact.rejected",
       "group.created",
       "group.name_taken",
       "group.create_failed",
