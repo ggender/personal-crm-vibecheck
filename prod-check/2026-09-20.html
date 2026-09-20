@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Готовность к проду</title>
+<style>
+  :root {
+    --paper: #fbfbf9; --ink: #1b1f2a; --muted: #5c6270; --line: #dde0e6; --line-soft: #eceef2; --field: #ffffff;
+    --green: #1e8a5a; --amber: #c8890a; --red: #c93b2b; --blue: #3a6fd8; --grey: #8a8f99;
+    --focus: #1b1f2a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #15171c; --ink: #e8e9ed; --muted: #9aa0ab; --line: #2b2f38; --line-soft: #22252c; --field: #1b1e24;
+      --green: #4cc38a; --amber: #e0a92e; --red: #ef6a57; --blue: #7aa2ff; --grey: #7c8290;
+      --focus: #e8e9ed;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #15171c; --ink: #e8e9ed; --muted: #9aa0ab; --line: #2b2f38; --line-soft: #22252c; --field: #1b1e24;
+    --green: #4cc38a; --amber: #e0a92e; --red: #ef6a57; --blue: #7aa2ff; --grey: #7c8290;
+    --focus: #e8e9ed;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-variant-numeric: tabular-nums; }
+  .page { max-width: 880px; margin: 0 auto; padding: 40px 20px 96px; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .92em; }
+  .st-🟢 { --c: var(--green); } .st-🟡 { --c: var(--amber); } .st-🔴 { --c: var(--red); } .st-⚪ { --c: var(--grey); } .st-❔ { --c: var(--blue); }
+
+  /* Header and verdict */
+  .head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid var(--ink); }
+  .head h1 { font-size: 17px; font-weight: 600; margin: 0; letter-spacing: .01em; }
+  .head .when { color: var(--muted); font-size: 15px; margin: 0; }
+  .verdict { margin: 40px 0 8px; font-size: clamp(30px, 5.2vw, 44px); line-height: 1.08; font-weight: 700; letter-spacing: -.015em; max-width: 18ch; }
+  .verdict.no { color: var(--red); } .verdict.yes { color: var(--green); }
+  .tally { margin: 0 0 36px; font-size: 18px; color: var(--muted); max-width: 60ch; }
+  .tally b { color: var(--ink); font-weight: 600; }
+
+  /* Gap map: one row per section */
+  .map { border-top: 1px solid var(--line); }
+  .row { display: grid; grid-template-columns: 200px 1fr; gap: 6px 24px; padding: 18px 0; border-bottom: 1px solid var(--line); align-items: start; }
+  .row h2 { font-size: 16px; font-weight: 600; margin: 0; line-height: 1.35; }
+  .row h2 small { display: block; font-weight: 400; color: var(--muted); font-size: 14px; }
+  .row h2 a { color: inherit; text-decoration: none; }
+  .row h2 a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .cells { display: flex; flex-wrap: wrap; gap: 3px; }
+  .cell { width: 14px; height: 18px; border-radius: 2px; background: var(--c, var(--grey)); border: 0; padding: 0; cursor: pointer; opacity: .95; }
+  .cell:hover { opacity: 1; transform: translateY(-1px); }
+  .counts { grid-column: 2; color: var(--muted); font-size: 14px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .counts span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: var(--c); margin-right: 6px; vertical-align: 0; }
+  .short { grid-column: 2; margin: 2px 0 0; font-size: 15px; max-width: 64ch; }
+
+  /* Top findings */
+  h2.title { font-size: 22px; font-weight: 700; letter-spacing: -.01em; margin: 56px 0 16px; }
+  .top ol { margin: 0; padding: 0; list-style: none; counter-reset: item; max-width: 68ch; }
+  .top li { counter-increment: item; display: grid; grid-template-columns: 32px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line-soft); }
+  .top li::before { content: counter(item); font-weight: 700; color: var(--red); font-size: 20px; line-height: 1.2; }
+  .top li b { font-weight: 600; }
+  .top .closing { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); max-width: 68ch; }
+
+  /* Filters */
+  .tools { position: sticky; top: 0; z-index: 3; background: var(--paper); margin-top: 48px; padding: 12px 0 10px; border-bottom: 1px solid var(--ink); }
+  .filters { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: 8px; }
+  .filter { background: none; border: 0; padding: 6px 10px; border-radius: 6px; font: inherit; font-size: 15px; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+  .filter::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: var(--c, var(--ink)); }
+  .filter.all::before { display: none; }
+  .filter b { font-weight: 600; color: var(--ink); }
+  .filter[aria-pressed="true"] { color: var(--ink); background: var(--line-soft); }
+  .filter:not([aria-pressed="true"]) b { color: var(--muted); }
+  .fold { background: none; border: 0; padding: 6px 8px; font: inherit; font-size: 14px; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; border-radius: 4px; }
+  .fold:hover { color: var(--ink); }
+  .fold-group { margin-left: auto; display: flex; gap: 2px; }
+  .actions input { flex: 0 1 280px; min-width: 150px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--ink); font: inherit; font-size: 15px; }
+
+  /* Register of criteria */
+  .section-title { font-size: 22px; font-weight: 700; letter-spacing: -.01em; margin: 44px 0 6px; }
+  details.group { margin: 0 0 8px; }
+  details.group > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 12px; padding: 12px 0 8px; border-bottom: 1px solid var(--ink); }
+  details.group > summary::-webkit-details-marker { display: none; }
+  details.group > summary h3 { font-size: 17px; font-weight: 600; margin: 0; }
+  details.group > summary::before { content: ""; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); margin: 0 4px 0 2px; transition: transform .15s; flex: none; align-self: center; }
+  details.group[open] > summary::before { transform: rotate(45deg); margin-top: -4px; }
+  @media (prefers-reduced-motion: reduce) { details.group > summary::before { transition: none; } }
+  details.group > summary .tally-mini { margin-left: auto; display: flex; gap: 10px; font-size: 14px; color: var(--muted); }
+  .tally-mini span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: var(--c); margin-right: 5px; }
+  .item { display: grid; grid-template-columns: 22px 1fr auto; gap: 4px 12px; padding: 14px 0; border-bottom: 1px solid var(--line-soft); scroll-margin-top: 72px; }
+  .item .sq { width: 12px; height: 12px; border-radius: 2px; background: var(--c); margin-top: 7px; }
+  .item .name { font-weight: 600; max-width: 70ch; }
+  .item .id { color: var(--muted); font-size: 13px; padding-top: 3px; }
+  .item .found { grid-column: 2 / 4; color: var(--muted); font-size: 15px; max-width: 72ch; }
+  .item .meaning { grid-column: 2 / 4; margin: 4px 0 0; padding: 2px 0 2px 14px; border-left: 3px solid var(--c); font-size: 15px; max-width: 72ch; }
+  .item .meaning b { font-weight: 600; }
+  .item.flash { background: var(--line-soft); }
+  .hidden { display: none !important; }
+  .nothing { color: var(--muted); padding: 24px 0; }
+
+  @media (max-width: 640px) {
+    .page { padding: 28px 16px 80px; }
+    .row { grid-template-columns: 1fr; gap: 8px; }
+    .counts, .short { grid-column: 1; }
+    .item { grid-template-columns: 18px 1fr; }
+    .item .id { grid-column: 2; padding: 0; }
+    .item .found, .item .meaning { grid-column: 2; }
+    .actions input { flex-basis: 100%; }
+    .fold-group { margin-left: 0; }
+  }
+  @media print {
+    .tools { display: none; }
+    details.group { break-inside: avoid; }
+    .item { break-inside: avoid; }
+    .page { padding: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="head">
+    <h1>Готовность к проду</h1>
+    <p class="when" id="when"></p>
+  </header>
+
+  <p class="verdict" id="verdict"></p>
+  <p class="tally" id="tally"></p>
+
+  <div class="map" id="map"></div>
+
+  <h2 class="title">Самое критичное</h2>
+  <div class="top" id="top"></div>
+
+  <div class="tools">
+    <div class="filters" id="filters"></div>
+    <div class="actions">
+      <input id="search" type="search" placeholder="Найти критерий" aria-label="Поиск по критериям">
+      <span class="fold-group" id="fold"></span>
+    </div>
+  </div>
+
+  <div id="register"></div>
+</div>
+
+<script type="application/json" id="report-data">{"date":"2026-09-20","totals":{"🟢":39,"🟡":5,"🔴":24,"⚪":3,"❔":7},"verdict":"нет — 24 красных, 7 не проверено","top":{"items":["**Код живёт только на одном компьютере.** Нет GitHub: сломался ноутбук — пропал продукт вместе с историей. От этого же падают 9 критериев: PR, автопроверки, Dependabot, security-review, защита main.","**Копия базы делается руками, восстановление не проверено.** Контакты и заметки вводились руками, восстановить их неоткуда. Один сбой диска или лишний `db:reset` — данные не вернуть.","**Приложение нельзя перенести на сервер.** Нет контейнера для приложения, нет примера переменных, нет сред. Первая выкатка станет подбором настроек вручную, а прода и отката не существует.","**О поломке узнаешь от пользователя.** Логи живут в терминале, оповещений нет. Причину вчерашнего сбоя не найти.","**Список без ограничения.** На пустой поиск уходят все 999 контактов целиком. Пока ты один, незаметно; при росте базы и людей начнёт тормозить у всех.","**Нет защитных заголовков и таймаутов.** Продукт можно встроить в чужой сайт, а зависшая почта или база вешают его целиком."],"closing":"Что уже закрыто и держит остальное: вход, разделение данных по людям с тестами, секреты вне кода, защита от инъекций и XSS, миграции, слои кода под контролем линтера, сквозной тест главного сценария в браузере. Все красные пункты выше — про инфраструктуру вокруг кода, не про сам код."},"sections":[{"title":"Продуктовая готовность","short":"идея, сценарии и их проверки в браузере на месте, пустые экраны и доступность сделаны; продукт не в интернете — нет домена, https, установки на телефон и аналитики","subsections":[{"title":"Сценарии и покрытие","criteria":[{"id":"P1.1","text":"в репозитории есть продуктовая идея с главным сценарием и критерием успеха","status":"🟢","found":"`specs/01-продуктовая-идея.md`: три шага сценария и три критерия успеха","meaning":"без записанной идеи непонятно, ради чего продукт и что считать «работает»: ты и агент проверяете разное"},{"id":"P1.2","text":"все шаги главного сценария реализованы, без заглушек и «в разработке»","status":"🟢","found":"список, добавление, поиск по имени, карточка и заметка работают; заглушек и «скоро» в экранах нет","meaning":"человек доходит до незаконченного шага и упирается: не получает того, ради чего пришёл"},{"id":"P1.3","text":"главный сценарий покрыт e2e-тестом в браузере, без моков","status":"🟢","found":"`e2e/scenarios.spec.ts`, проверка «критерий успеха»: открыть, добавить, найти, написать заметку, увидеть в другом браузере; на собранном приложении с настоящей базой","meaning":"«работает» держится на твоих словах; после правки о поломке узнаешь от пользователя"},{"id":"P1.4","text":"продуктовые фичи и сценарии записаны в репозитории, в любом виде: идея, PRD, список сценариев, спеки","status":"🟢","found":"`specs/` (идея, план сборки, три фичи) и `openspec/specs/` (девять возможностей со сценариями)","meaning":"что умеет продукт, решил агент, а не ты; сверить продукт не с чем"},{"id":"P1.5","text":"на записанные сценарии есть тесты, сценарии без теста видны как гэпы","status":"🟢","found":"правило «сценарий без теста — отдельное решение» в `openspec/config.yaml`; 30 сценариев без теста докрыты отдельным изменением; карта «сценарий ↔ тест» в `specs/boards/spec-map.html`","meaning":"сценарий без теста ломается незаметно при следующей доработке; узнаешь от пользователя"}]},{"title":"Пользовательский опыт","criteria":[{"id":"P2.1","text":"у пустого состояния есть подсказка первого шага","status":"🟢","found":"у нового человека список говорит, что контактов ещё нет, и предлагает «Добавить первого»; старт с подсказкой «кому ты сейчас звонил»","meaning":"новый человек с пустой базой видит пустой экран, не понимает, что делать первым, и уходит"},{"id":"P2.2","text":"поля проверяются на фронте до отправки, ошибка показывается у поля","status":"🟡","found":"ошибка показывается у поля и текст не теряется, но форма контакта проверяет поля на сервере после отправки; до отправки проверяется только почта на экране входа","meaning":"ошибку в поле человек видит только после отправки формы; формы бросают на полпути"},{"id":"P2.3","text":"лендинг и продукт открываются по своему домену","status":"🔴","found":"продукт живёт только на твоём компьютере, лендинга нет, домена нет","meaning":"ссылку с IP или чужим поддоменом стыдно дать, и рекламу на неё не запустить"},{"id":"P2.4","text":"https включён, http перенаправляется","status":"🔴","found":"приложение не выложено, защищённого соединения нет","meaning":"браузер пишет «небезопасно», рекламные системы не пускают трафик"},{"id":"P2.5","text":"продукт ставится на домашний экран телефона (manifest)","status":"🔴","found":"файла-описания приложения для телефона нет","meaning":"с телефона продукт живёт как вкладка, которую теряют, а не как приложение с иконкой"},{"id":"P2.6","text":"доступность: работа с клавиатуры, видимый фокус, контраст","status":"🟢","found":"у полей подписи, выбранный контакт помечен, есть ссылка «к карточке» для клавиатуры, фокус виден, всё это проверяется сценариями в браузере","meaning":"кто без мыши или плохо видит, сценарий не пройдёт; в формах и списках это заметная доля людей"},{"id":"P2.7","text":"подключена продуктовая аналитика на лендинге и в продукте","status":"🔴","found":"ни одного счётчика событий в коде нет","meaning":"не видно, где люди отваливаются; гипотезы проверяются ощущениями, а не цифрами"}]},{"title":"Дизайн","criteria":[{"id":"P3.1","text":"есть десктопная и мобильная разметка","status":"🟢","found":"на широком экране две колонки, на телефоне список сверху с ограничением высоты и карточка под ним","meaning":"на телефоне панели встают друг под друга или уезжают за край; половина людей приходит с телефона"},{"id":"P3.2","text":"цвета, отступы и шрифты заданы токенами в коде, в экранах значений нет","status":"🟢","found":"все цвета и радиусы в `src/app/globals.css`, в экранах ни одного зашитого цвета","meaning":"цвет или отступ зашит в каждом экране: сменить вид — переписать все экраны"},{"id":"P3.3","text":"лендинг и продукт используют одни токены","status":"⚪","found":"лендинга ещё нет; проверить, когда появится","meaning":"человек с лендинга попадает в продукт с другим видом и не понимает, туда ли пришёл"},{"id":"P3.4","text":"тема не дефолт инструмента: свои цвета и шрифт","status":"🟢","found":"тёплая «бумажная» палитра по эскизу, шрифты Inter и Source Serif","meaning":"продукт выглядит как сотни других «сделанных ИИ», доверие падает"}]}]},{"title":"Техническая готовность","short":"тесты, миграции, слои кода и логи — хорошо; всё, что дальше твоего компьютера, отсутствует: нет GitHub, автопроверок, контейнера приложения, сред, выкатки и отката, копия базы делается руками","subsections":[{"title":"Регресс","criteria":[{"id":"T1.1","text":"unit-тесты на бизнес-логику","status":"🟢","found":"271 проверка в Vitest: хранилища на настоящей базе в памяти, проверка ввода, форматирование, ритм «пора связаться»","meaning":"правила, по которым работает продукт, ломаются незаметно при любой правке; найдёшь по жалобе"},{"id":"T1.2","text":"тесты проверяют поведение, не реализацию: тест падает без реализации и проходит с ней","status":"🟢","found":"тесты смотрят на результат в базе и на экране; правило «сначала красный» зашито в `openspec/config.yaml` и `CLAUDE.md`","meaning":"тест, который проходит и на сломанном коде, ничего не ловит: поломка уходит в прод при зелёных проверках"},{"id":"T1.3","text":"все тесты запускаются одной командой","status":"🟡","found":"проверки логики одной командой, сценарии в браузере — другой; общей команды нет","meaning":"тесты, которые запускаются по частям и руками, перестают запускать; защита от поломок исчезает"},{"id":"T1.4","text":"тесты гоняются автоматически на каждый PR","status":"🔴","found":"автоматического прогона нет: ни папки `.github`, ни другого сервиса проверок; репозиторий не выложен на GitHub","meaning":"правка без автоматического прогона попадает в прод непроверенной"},{"id":"T1.5","text":"красный прогон блокирует слияние","status":"🔴","found":"слияния нечем блокировать, автопроверок нет","meaning":"красный тест, который не мешает слить, начинают игнорировать; через месяц красных десяток"}]},{"title":"Данные","criteria":[{"id":"T2.1","text":"входные данные валидируются на сервере по схеме, невалидные не попадают в базу","status":"🟢","found":"каждое действие сначала проверяет ввод по схеме (Zod) в `validation.ts` своей фичи, потом идёт в базу","meaning":"в базу попадает мусор: пустые имена, телефон в поле почты; чистить потом руками"},{"id":"T2.2","text":"изменения схемы оформлены миграциями","status":"🟢","found":"три миграции в `src/db/migrations/`, генерируются из схемы","meaning":"изменение структуры базы руками не повторить на проде и не откатить"},{"id":"T2.3","text":"миграции применяются пайплайном, не руками","status":"🔴","found":"только команда `npm run db:migrate` руками; приложение показывает «База устарела», пока её не выполнят","meaning":"забытая миграция на проде: приложение падает сразу после выкатки"},{"id":"T2.4","text":"миграция на живых данных проходит без потери старых записей","status":"🟢","found":"две миграции уже прошли по живой базе (владельцы, группы) без потери контактов; есть тест миграций","meaning":"при смене структуры старые записи людей пропадают или теряют поля"},{"id":"T2.5","text":"есть регулярный бэкап","status":"🟡","found":"в README две команды: снять копию и восстановить; расписания нет, копия делается руками","meaning":"один сбой диска или случайный сброс базы — данные людей не вернуть"},{"id":"T2.6","text":"восстановление из бэкапа проверяется регулярно","status":"❔","found":"из репозитория не видно, пробовали ли восстановление; спросить автора","meaning":"копия, которую ни разу не восстанавливали, часто оказывается пустой или битой; узнаёшь в день аварии"}]},{"title":"Сборка и выкатка","criteria":[{"id":"T3.1","text":"в README есть инструкция запуска, по ней проект поднимается на чистой машине","status":"🟢","found":"четыре команды, что нужно поставить, как войти, что делать при сбоях","meaning":"запускается только на твоём компьютере: перенос на сервер — подбор настроек вручную"},{"id":"T3.2","text":"версии рантайма и зависимостей зафиксированы (lock-файл)","status":"🟡","found":"библиотеки зафиксированы в `package-lock.json`; для Node задан только нижний порог «22 или новее», точной версии нет","meaning":"через месяц те же команды поставят другие версии чужого кода (библиотек), и что-то сломается «само»"},{"id":"T3.3","text":"приложение собирается в контейнер","status":"🔴","found":"в Docker живут только база и почта; для самого приложения ни Dockerfile, ни образа","meaning":"то, что работало у тебя, на сервере собирается иначе"},{"id":"T3.4","text":"конфигурация передаётся через переменные окружения","status":"🟢","found":"адрес базы, почты, ключ входа читаются из переменных, в коде только значения для локального запуска","meaning":"чтобы поменять адрес базы или ключ, придётся пересобирать приложение; тест и прод живут с одними настройками"},{"id":"T3.5","text":"есть пример файла переменных без значений","status":"🔴","found":"файла-примера нет; какие переменные нужны, описано только в README","meaning":"новый человек или сервер не знает, какие переменные нужны; запуск падает с непонятной ошибкой"},{"id":"T3.6","text":"у прода своя база и свои ключи, отдельные от тестовой среды","status":"🔴","found":"сред нет: одна локальная база для работы и отдельная для сценариев; прод не настроен","meaning":"опыты на тесте ставятся на настоящих записях людей: сломал — сломал у всех"},{"id":"T3.7","text":"main защищён: изменения только через PR, прямой push запрещён","status":"🔴","found":"код хранится только на этом компьютере, копии на GitHub нет; ветки есть, защиты нет","meaning":"правка в обход проверок попадает в прод; никто не заметит, пока не сломается"},{"id":"T3.8","text":"после влития PR в main пайплайн автоматически собирает контейнер и выкатывает его на тест","status":"🔴","found":"тестового стенда и пайплайна нет","meaning":"на тестовый стенд руками попадает не та версия, что пойдёт в прод; проверка на тесте ничего не гарантирует"},{"id":"T3.9","text":"на прод уезжает тот же контейнер с main, по кнопке","status":"🔴","found":"прода и контейнера нет","meaning":"перед продом приложение собирается заново и уже иначе: проверяли одно, выкатили другое"},{"id":"T3.10","text":"откат на проде — выкатка предыдущего контейнера одной командой","status":"🔴","found":"откатывать нечего и нечем","meaning":"сломанную версию нельзя вернуть назад: чинить придётся под жалобами"}]},{"title":"Ошибки и наблюдаемость","criteria":[{"id":"T4.1","text":"при сбое пользователь видит понятное сообщение, без стек-трейсов и текстов исключений","status":"🟢","found":"экран «Что-то сломалось» с объяснением и кнопкой, под формами «Не удалось сохранить» с повтором; наружу уходит только код ошибки","meaning":"человек видит белый экран или техническую простыню и не знает, что делать; простыня ещё и раскрывает устройство системы"},{"id":"T4.2","text":"логи сервера сохраняются, а не живут в терминале","status":"🔴","found":"журнал пишется в окно терминала и нигде не хранится","meaning":"закрыл терминал — причину вчерашнего сбоя уже не найти"},{"id":"T4.3","text":"о критических ошибках приходит оповещение","status":"🔴","found":"ошибки помечаются словом ERROR в терминале, никуда не отправляются","meaning":"о поломке узнаёшь от пользователя, через день"}]},{"title":"Нагрузка и стоимость","criteria":[{"id":"T5.1","text":"долгие операции вынесены из запроса в фон","status":"🟡","found":"долгих операций нет; единственный внешний вызов — отправка письма для входа — идёт внутри запроса","meaning":"при десятке одновременных людей страница виснет у всех"},{"id":"T5.2","text":"на внешние вызовы и запросы заданы таймауты","status":"🔴","found":"таймаутов ни на базу, ни на почту; действуют умолчания библиотек, это минуты","meaning":"зависший внешний сервис вешает твой продукт целиком"},{"id":"T5.3","text":"настроен пул соединений к базе","status":"🟢","found":"один пул на процесс, создаётся при первом запросе","meaning":"каждый запрос открывает своё соединение: база захлёбывается при первом наплыве"},{"id":"T5.4","text":"списки отдаются с пагинацией или лимитом, выборок без ограничения нет","status":"🔴","found":"поиск и список отдают все совпадения без ограничения; на пустой поиск уходят все 999 контактов","meaning":"список из тысячи записей грузится целиком: экран тормозит, база и трафик растут с каждым днём"},{"id":"T5.5","text":"нет N+1 запросов к базе","status":"🟢","found":"экран собирается несколькими запросами параллельно, по контактам циклов нет","meaning":"список на сто строк делает сто один запрос к базе: медленно уже на десятке людей"},{"id":"T5.6","text":"на API стоит общий лимит запросов","status":"🔴","found":"лимит есть только на запрос ссылки для входа; остальные действия без ограничений","meaning":"один скрипт или бот кладёт продукт, а с платными вызовами — ещё и выставляет счёт"},{"id":"T5.7","text":"стоит лимит расходов на хостинг","status":"❔","found":"хостинга ещё нет; проверить при выкатке","meaning":"ошибка в коде или чужой трафик за ночь выставляют счёт тебе"},{"id":"T5.8","text":"стоит лимит расходов на вызовы моделей","status":"⚪","found":"вызовов моделей в продукте нет","meaning":"зациклившийся вызов модели или спам сжигают бюджет за часы"}]},{"title":"Код","criteria":[{"id":"T6.1","text":"работа с данными в сервисном слое, не в экранах","status":"🟢","found":"база доступна только из `src/db/` и `features/*/data/`; нарушение ловит линтер как ошибку","meaning":"запросы к базе разбросаны по экранам: одна правка структуры — правки в двадцати местах"},{"id":"T6.2","text":"логика не продублирована","status":"🟢","found":"у каждой логики один дом, записано в `CLAUDE.md` и соблюдается: имена, даты, проверки ввода, вход","meaning":"одна логика в трёх местах: починил в одном, в двух других баг остался"},{"id":"T6.3","text":"strict включён; явный any запрещён линтером, исключения с комментарием","status":"🟢","found":"`strict: true`, правила Next для TypeScript, ни одного `any` в коде","meaning":"агент глушит предупреждения о несостыковках в коде вместо того, чтобы их разобрать; они всплывают у пользователя"},{"id":"T6.4","text":"линтер и форматтер работают в CI","status":"🔴","found":"ESLint и Prettier настроены и запускаются руками; автоматического запуска нет","meaning":"порядок в коде расползается незаметно с каждой правкой агента"},{"id":"T6.5","text":"фичи модульные: каждая в своей папке, не размазана по приложению","status":"🟢","found":"`src/features/auth`, `contacts`, `database` — каждая со своими экранами, действиями и данными","meaning":"фича, размазанная по приложению, при правке или удалении цепляет соседние"},{"id":"T6.6","text":"в репозитории есть CLAUDE.md с правилами проекта для агента: стек, структура, соглашения","status":"🟢","found":"правила дома, словарь имён, слои, определение готовности, команды","meaning":"каждая новая сессия агента начинает с нуля и пишет по-своему; код становится лоскутным"}]}]},{"title":"Безопасность","short":"вход, разделение данных, секреты и защита от инъекций закрыты; нет защитных заголовков и автоматических проверок зависимостей; сервера ещё нет — его настройки проверять при выкатке","subsections":[{"title":"Аутентификация и права","criteria":[{"id":"S1.1","text":"есть аутентификация","status":"🟢","found":"вход по ссылке из письма (Better Auth, magic link), без пароля","meaning":"любой, кто узнает адрес, читает, меняет и стирает все записи"},{"id":"S1.2","text":"права проверяются на сервере, не на клиенте","status":"🟢","found":"каждая страница и каждое действие сначала узнают пользователя на сервере; без входа — на экран входа","meaning":"проверку прав, сделанную в браузере, обходят одним запросом напрямую к серверу"},{"id":"S1.3","text":"клиентский код к базе не обращается","status":"🟢","found":"импорт базы в экранах запрещён линтером","meaning":"ключ от базы уходит в браузер каждому посетителю"},{"id":"S1.4","text":"пользователь не видит чужих данных, есть тест «чужие данные → отказ»","status":"🟢","found":"все запросы фильтруют по владельцу; проверки «чужой контакт», «чужие группы», «чужие заметки» в Vitest и «новая почта не видит чужих контактов» в браузере","meaning":"подставил чужой номер в адресе — увидел чужие контакты и заметки; без теста это ломается при первой правке"},{"id":"S1.5","text":"токены magic link криптографически случайные, одноразовые, с TTL","status":"🟢","found":"ссылка живёт 5 минут, срабатывает один раз, в базе хранится только её хэш; всё это проверено сценариями","meaning":"угадываемая или вечная ссылка для входа — вход в чужой аккаунт"},{"id":"S1.6","text":"сессия истекает","status":"🟢","found":"вход держится 7 дней; сценарий «истёкшая сессия не даёт сохранить» есть","meaning":"вошёл на чужом компьютере год назад — сессия до сих пор открыта"}]},{"title":"Секреты и утечки","criteria":[{"id":"S2.1","text":"секреты не в коде, не в бандле, не в git","status":"🟢","found":"ключ входа только из переменной окружения, `.env` в `.gitignore`, папка с данными тоже","meaning":"ключ от платного сервиса уедет вместе с кодом; платить по счёту будешь ты"},{"id":"S2.2","text":"у агента нет доступа на запись в прод","status":"❔","found":"прода ещё нет; при выкатке не давать агенту доступ к серверу и базе","meaning":"одна ошибочная команда агента — и данные людей на проде стёрты"},{"id":"S2.3","text":"в логи и трекер ошибок не пишутся персональные данные, только идентификаторы записей","status":"🟢","found":"журнал принимает только числа и да/нет; вывод аргументов действий и адресов входа отключён в `next.config.ts`","meaning":"телефоны и заметки о людях копятся в логах и трекере ошибок, которые хранятся дольше и защищены хуже базы"}]},{"title":"Уязвимости","criteria":[{"id":"S3.1","text":"инъекции (SQL, команды) закрыты","status":"🟢","found":"все запросы через Drizzle с параметрами, спецсимволы в поиске экранируются, команд ОС нет","meaning":"строка в поле поиска стирает или вытаскивает всю базу"},{"id":"S3.2","text":"XSS закрыт: нет eval / new Function / dangerouslySetInnerHTML","status":"🟢","found":"ни одного вхождения; в письме адрес экранируется","meaning":"вредный код, вставленный в заметку, выполняется у каждого, кто её открыл, и открывает доступ к его аккаунту"},{"id":"S3.3","text":"CSRF закрыт: мутации только через Server Actions или с проверкой Origin","status":"🟢","found":"все изменения данных через Server Actions; вход через Better Auth со своей проверкой источника","meaning":"клик по чужой ссылке меняет или удаляет твои данные от твоего имени"},{"id":"S3.4","text":"cookie сессии HttpOnly, Secure, SameSite","status":"🟢","found":"умолчания Better Auth: только для сервера, только по https в рабочей сборке, без сторонних сайтов","meaning":"ключ входа (cookie) перехватывают через чужой код или незащищённое соединение и пользуются аккаунтом"},{"id":"S3.5","text":"заголовки безопасности выставлены: HSTS, CSP, запрет встраивания во фреймы","status":"🔴","found":"в `next.config.ts` ни одного защитного заголовка","meaning":"продукт можно встроить в чужой сайт и подменять клики; защиты браузера выключены"},{"id":"S3.6","text":"CORS ограничен своим доменом","status":"🟢","found":"доступ с других сайтов не открыт: ни одного разрешающего заголовка","meaning":"чужой сайт делает запросы к твоему продукту от имени вошедшего человека"},{"id":"S3.7","text":"на вход (magic link) стоит отдельный лимит, жёстче общего","status":"🟢","found":"пять ссылок в минуту, дальше «подожди минуту»; проверено сценарием","meaning":"бот шлёт тысячи писем со ссылкой для входа: счёт за почту и блокировка домена"},{"id":"S3.8","text":"загрузка файлов, если есть: проверка типа и размера, хранение вне webroot","status":"⚪","found":"загрузки файлов в продукте нет","meaning":"загруженный «файл» оказывается скриптом и выполняется на сервере, или диск забивают за час"},{"id":"S3.9","text":"зависимости проверяются на уязвимости в CI (pnpm audit)","status":"🔴","found":"аудит зависимостей нигде не запускается","meaning":"дыра в чужом коде (библиотеке), который использует продукт, — твоя дыра; узнаёшь, когда уже воспользовались"},{"id":"S3.10","text":"обновления уязвимых пакетов приходят автоматически (Dependabot)","status":"🔴","found":"репозитория на GitHub нет, автообновлений нет","meaning":"известная дыра лежит в проекте месяцами, хотя починка вышла давно"},{"id":"S3.11","text":"на каждый PR запускается security-review Anthropic","status":"🔴","found":"PR нет, проверки нет","meaning":"агент приносит уязвимость в правке, и никто её не читает до прода"}]},{"title":"Сервер","criteria":[{"id":"S4.1","text":"на VPS включены автоматические обновления безопасности ОС","status":"❔","found":"сервера ещё нет; проверить при настройке VPS","meaning":"дыра в системе сервера открыта до ручного обновления, которое никто не делает"},{"id":"S4.2","text":"вход на VPS только по ключу, вход по паролю отключён","status":"❔","found":"сервера ещё нет; проверить в настройках SSH","meaning":"пароль подбирают автоматически; сервер ломают за дни"},{"id":"S4.3","text":"работа не под root: отдельный пользователь с sudo, вход root по SSH отключён","status":"❔","found":"сервера ещё нет; проверить при настройке VPS","meaning":"одна ошибка или взлом — полный контроль над сервером, а не над одним приложением"},{"id":"S4.4","text":"наружу открыты только 22, 80, 443; база и служебные порты не доступны из интернета","status":"❔","found":"сервера ещё нет; локально база и почта открыты только для этого компьютера","meaning":"база торчит в интернет: её находят сканеры и вычищают за ночь"}]}]}]}</script>
+<script>
+(() => {
+  const data = JSON.parse(document.getElementById("report-data").textContent);
+  const STATUS = {
+    "🔴": { name: "Не соблюдено", one: "не соблюдены" },
+    "🟡": { name: "Частично", one: "частично" },
+    "❔": { name: "Не проверено", one: "не проверены" },
+    "🟢": { name: "Соблюдено", one: "соблюдены" },
+    "⚪": { name: "Не применимо", one: "не применимы" },
+  };
+  const ORDER = Object.keys(STATUS);
+  const active = new Set(ORDER);
+  let query = "";
+
+  const el = (tag, attrs = {}, children = []) => {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(attrs)) {
+      if (value === null || value === undefined) continue;
+      if (key === "class") node.className = value;
+      else if (key === "text") node.textContent = value;
+      else node.setAttribute(key, value);
+    }
+    for (const child of [].concat(children)) if (child) node.append(child);
+    return node;
+  };
+  // "**bold**" and "`code`" only
+  const rich = (text) => {
+    const frag = document.createDocumentFragment();
+    String(text).split("**").forEach((part, i) => {
+      if (i % 2) { frag.append(el("b", { text: part })); return; }
+      part.split("`").forEach((piece, j) => frag.append(j % 2 ? el("code", { text: piece }) : document.createTextNode(piece)));
+    });
+    return frag;
+  };
+  const count = (criteria) => {
+    const c = Object.fromEntries(ORDER.map((s) => [s, 0]));
+    for (const x of criteria) if (x.status in c) c[x.status]++;
+    return c;
+  };
+  const flat = (section) => section.subsections.flatMap((s) => s.criteria);
+  const everything = data.sections.flatMap(flat);
+  const totals = count(everything);
+  const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+  const longDate = (iso) => {
+    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}` : iso;
+  };
+
+  // Header
+  document.getElementById("when").textContent = data.date ? `Проверка ${longDate(data.date)}, ${everything.length} критериев` : `${everything.length} критериев`;
+  const ready = !/^нет/i.test(data.verdict || "");
+  const verdict = document.getElementById("verdict");
+  verdict.textContent = ready ? "Продукт готов к проду." : "Продукт пока не готов к проду.";
+  verdict.classList.add(ready ? "yes" : "no");
+  const tallyParts = ORDER.filter((s) => totals[s]).map((s) => `${totals[s]} ${STATUS[s].one}`);
+  const tally = document.getElementById("tally");
+  tally.append(document.createTextNode("Из " + everything.length + " критериев: "));
+  tallyParts.forEach((part, i) => {
+    const [n, ...rest] = part.split(" ");
+    tally.append(el("b", { text: n }), document.createTextNode(" " + rest.join(" ") + (i < tallyParts.length - 1 ? ", " : ".")));
+  });
+
+  // Gap map
+  const map = document.getElementById("map");
+  data.sections.forEach((section, index) => {
+    const criteria = flat(section);
+    const c = count(criteria);
+    const cells = el("div", { class: "cells", role: "list" }, criteria.map((x) =>
+      el("button", { class: `cell st-${x.status}`, type: "button", role: "listitem", title: `${x.id} ${x.text}`, "aria-label": `${STATUS[x.status]?.name ?? "нет оценки"}: ${x.text}`, "data-target": `c-${x.id}` })));
+    cells.addEventListener("click", (event) => {
+      const cell = event.target.closest(".cell");
+      if (cell) reveal(cell.dataset.target);
+    });
+    map.append(el("div", { class: "row" }, [
+      el("h2", {}, [el("a", { href: `#s-${index}`, text: section.title }), el("small", { text: `${criteria.length} критериев` })]),
+      cells,
+      el("div", { class: "counts" }, ORDER.filter((s) => c[s]).map((s) => el("span", { class: `st-${s}`, text: `${STATUS[s].name} ${c[s]}` }))),
+      section.short ? el("p", { class: "short", text: section.short }) : null,
+    ]));
+  });
+
+  // Top findings
+  const top = document.getElementById("top");
+  if (data.top.items.length) {
+    top.append(el("ol", {}, data.top.items.map((item) => el("li", {}, el("div", {}, rich(item))))));
+    if (data.top.closing) top.append(el("p", { class: "closing" }, rich(data.top.closing)));
+  } else {
+    top.append(el("p", { class: "nothing", text: "В отчёте нет блока «Самое критичное»." }));
+  }
+
+  // Filters
+  const filtersBox = document.getElementById("filters");
+  const search = document.getElementById("search");
+  const filters = [];
+  const allButton = el("button", { class: "filter all", type: "button", "aria-pressed": "true", text: "Все" });
+  allButton.addEventListener("click", () => { for (const s of ORDER) active.add(s); render(); });
+  filtersBox.append(allButton);
+  for (const s of ORDER) {
+    const button = el("button", { class: `filter st-${s}`, type: "button", "aria-pressed": "true", "data-status": s }, [
+      document.createTextNode(STATUS[s].name + " "), el("b", { text: String(totals[s]) }),
+    ]);
+    button.addEventListener("click", () => {
+      if (active.size === ORDER.length) { active.clear(); active.add(s); }
+      else if (active.has(s)) { active.delete(s); if (!active.size) for (const x of ORDER) active.add(x); }
+      else active.add(s);
+      render();
+    });
+    filters.push(button);
+    filtersBox.append(button);
+  }
+  const foldAll = (open) => { for (const group of document.querySelectorAll("details.group")) group.open = open; };
+  const expandAll = el("button", { class: "fold", type: "button", text: "Развернуть все" });
+  const collapseAll = el("button", { class: "fold", type: "button", text: "Свернуть все" });
+  expandAll.addEventListener("click", () => foldAll(true));
+  collapseAll.addEventListener("click", () => foldAll(false));
+  document.getElementById("fold").append(expandAll, collapseAll);
+  search.addEventListener("input", () => { query = search.value.trim().toLowerCase(); render(); });
+
+  // Register
+  const register = document.getElementById("register");
+  data.sections.forEach((section, index) => {
+    register.append(el("h2", { class: "section-title", id: `s-${index}`, text: section.title }));
+    for (const sub of section.subsections) {
+      const c = count(sub.criteria);
+      const summary = el("summary", {}, [
+        el("h3", { text: sub.title }),
+        el("span", { class: "tally-mini" }, ORDER.filter((s) => c[s]).map((s) => el("span", { class: `st-${s}`, text: String(c[s]) }))),
+      ]);
+      const group = el("details", { class: "group", open: "" }, [summary]);
+      for (const x of sub.criteria) {
+        const info = STATUS[x.status];
+        group.append(el("div", { class: `item st-${x.status}`, id: `c-${x.id}`, "data-status": x.status, "data-text": `${x.id} ${x.text} ${x.found} ${x.meaning}`.toLowerCase() }, [
+          el("span", { class: "sq", title: info ? info.name : "нет оценки" }),
+          el("div", { class: "name", text: x.text }),
+          el("div", { class: "id", text: x.id }),
+          el("div", { class: "found" }, rich(x.found || "В отчёте нет оценки")),
+          ["🟡", "🔴", "❔"].includes(x.status) && x.meaning
+            ? el("p", { class: "meaning" }, [el("b", { text: "Что это значит: " }), rich(x.meaning)])
+            : null,
+        ]));
+      }
+      register.append(group);
+    }
+  });
+
+  function reveal(id) {
+    const item = document.getElementById(id);
+    if (!item) return;
+    for (const s of ORDER) active.add(s);
+    search.value = ""; query = "";
+    render();
+    item.closest("details")?.setAttribute("open", "");
+    item.scrollIntoView({ block: "center" });
+    item.classList.add("flash");
+    setTimeout(() => item.classList.remove("flash"), 1600);
+  }
+
+  function render() {
+    allButton.setAttribute("aria-pressed", String(active.size === ORDER.length));
+    for (const button of filters) button.setAttribute("aria-pressed", String(active.size !== ORDER.length && active.has(button.dataset.status)));
+    for (const group of register.querySelectorAll("details.group")) {
+      let visible = 0;
+      for (const item of group.querySelectorAll(".item")) {
+        const show = active.has(item.dataset.status) && (!query || item.dataset.text.includes(query));
+        item.classList.toggle("hidden", !show);
+        if (show) visible++;
+      }
+      group.classList.toggle("hidden", visible === 0);
+    }
+    for (const heading of register.querySelectorAll(".section-title")) {
+      let next = heading.nextElementSibling, any = false;
+      while (next && !next.classList.contains("section-title")) { if (!next.classList.contains("hidden")) any = true; next = next.nextElementSibling; }
+      heading.classList.toggle("hidden", !any);
+    }
+  }
+  render();
+})();
+</script>
+</body>
+</html>
