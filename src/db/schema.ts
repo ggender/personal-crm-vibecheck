@@ -131,7 +131,7 @@ export const contacts = pgTable(
     // Last press of «Пообщались».
     talkedAt: timestamp("talked_at", { withTimezone: true, mode: "date" }),
     // Optional birthday; added by an additive migration.
-    birthday:   date("birthday",  { mode: "string" }),
+    birthday: date("birthday", { mode: "string" }),
     createdAt: timestamp("created_at", {
       withTimezone: true,
       mode: "date",
