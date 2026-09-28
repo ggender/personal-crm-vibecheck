@@ -64,9 +64,10 @@ jobs:
              /opt/crm/deploy.sh prod ${{ steps.sha.outputs.full }}; code=\$?; docker logout ghcr.io >/dev/null; exit \$code"
       - name: Smoke test
         run: curl -fsS --retry 10 --retry-all-errors --retry-delay 3 "${{ vars.PROD_URL }}/api/health"
-      # Keep the newest 3 images in GHCR.
+      # Keep the newest 10 builds in GHCR. Counted by builds, not by prod
+      # versions: with 3, the previous prod version was already gone.
       - uses: actions/delete-package-versions@v5
         with:
           package-name: personal-crm-vibecheck
           package-type: container
-          min-versions-to-keep: 3
+          min-versions-to-keep: 10
