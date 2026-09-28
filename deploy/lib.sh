@@ -2,6 +2,10 @@
 set -euo pipefail
 CRM_ROOT=/opt/crm
 BACKUP_DIR=$CRM_ROOT/backups
+# Scripts are run by hand from any folder; compose needs a readable one.
+cd "$CRM_ROOT"
+# Backups hold personal data: readable by the deploy user only.
+umask 077
 
 stand_dir() { echo "$CRM_ROOT/$1"; }
 

@@ -54,7 +54,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
           echo "${{ vars.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-      - name: Server scripts of this commit
+      - name: Server scripts from main
         run: scp -i ~/.ssh/deploy deploy/compose.yml deploy/*.sh deploy@${{ vars.SERVER_HOST }}:/opt/crm/
       - name: Deploy
         run: |
