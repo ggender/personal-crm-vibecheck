@@ -9,7 +9,13 @@ DIR=$(stand_dir "$ENV")
 export IMAGE_TAG=$SHA
 APP_PORT=$(grep '^APP_PORT=' "$DIR/.env" | cut -d= -f2)
 
-docker pull -q "ghcr.io/ggender/personal-crm-vibecheck:$SHA"
+# The registry is not always reachable from the data center: retry.
+for attempt in 1 2 3 4 5; do
+  docker pull -q "ghcr.io/ggender/personal-crm-vibecheck:$SHA" && break
+  [ "$attempt" = 5 ] && { echo "Could not pull the image" >&2; exit 1; }
+  echo "pull retry $attempt"
+  sleep 10
+done
 dc "$ENV" up -d --wait db mailpit
 
 if [ "$ENV" = prod ]; then
