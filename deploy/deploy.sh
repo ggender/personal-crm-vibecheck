@@ -9,9 +9,13 @@ DIR=$(stand_dir "$ENV")
 export IMAGE_TAG=$SHA
 APP_PORT=$(grep '^APP_PORT=' "$DIR/.env" | cut -d= -f2)
 
+IMAGE="ghcr.io/ggender/personal-crm-vibecheck:$SHA"
 # The registry is not always reachable from the data center: retry.
+# An image already on the server is used as is: a rollback must work even
+# when the registry no longer keeps that version.
 for attempt in 1 2 3 4 5; do
-  docker pull -q "ghcr.io/ggender/personal-crm-vibecheck:$SHA" && break
+  docker image inspect "$IMAGE" >/dev/null 2>&1 && break
+  docker pull -q "$IMAGE" && break
   [ "$attempt" = 5 ] && { echo "Could not pull the image" >&2; exit 1; }
   echo "pull retry $attempt"
   sleep 10
