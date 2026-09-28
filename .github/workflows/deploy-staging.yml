@@ -10,9 +10,10 @@ permissions:
   contents: read
   packages: write
 
-# One deploy at a time, staging and prod share the group.
+# One deploy at a time per stand. A shared group would let a queued prod
+# deploy cancel the queued staging deploy of the newest commit.
 concurrency:
-  group: deploy
+  group: deploy-staging
   cancel-in-progress: false
 
 env:
