@@ -46,11 +46,16 @@ jobs:
           done
           echo "::error::Коммит $sha не прошёл тест-стенд - на прод не катим"
           exit 1
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.sha.outputs.full }}
       - name: SSH key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
           echo "${{ vars.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+      - name: Server scripts of this commit
+        run: scp -i ~/.ssh/deploy deploy/compose.yml deploy/*.sh deploy@${{ vars.SERVER_HOST }}:/opt/crm/
       - name: Deploy
         run: |
           ssh -i ~/.ssh/deploy deploy@${{ vars.SERVER_HOST }} \
