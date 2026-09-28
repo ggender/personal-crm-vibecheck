@@ -1,0 +1,60 @@
+# Server stands: one file for staging and prod, run as separate compose
+# projects (crm-staging, crm-prod) with their own .env in /opt/crm/<env>/.
+# The app image comes from GHCR, tagged with the commit SHA (IMAGE_TAG).
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: --locale-provider=builtin --locale=C.UTF-8
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # Catches the login letters: no real mail leaves the server.
+  mailpit:
+    image: axllent/mailpit:v1.31
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT}:8025"
+
+  app:
+    image: ghcr.io/ggender/personal-crm-vibecheck:${IMAGE_TAG}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: &app-env
+      CRM_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/crm
+      BETTER_AUTH_URL: ${APP_URL}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      CRM_SMTP_URL: smtp://mailpit:1025
+    ports:
+      - "127.0.0.1:${APP_PORT}:3000"
+
+  # One-off steps from the same image: docker compose run --rm migrate
+  migrate:
+    image: ghcr.io/ggender/personal-crm-vibecheck:${IMAGE_TAG}
+    profiles: [tools]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: *app-env
+    command: ["./node_modules/.bin/tsx", "src/db/migrate.ts"]
+
+  seed:
+    image: ghcr.io/ggender/personal-crm-vibecheck:${IMAGE_TAG}
+    profiles: [tools]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: *app-env
+    command: ["./node_modules/.bin/tsx", "src/db/seed.ts"]
+
+volumes:
+  db:
