@@ -3,6 +3,7 @@ import {
   index,
   integer,
   pgTable,
+  date,
   primaryKey,
   text,
   timestamp,
@@ -129,6 +130,8 @@ export const contacts = pgTable(
     keepInTouchDays: integer("keep_in_touch_days"),
     // Last press of «Пообщались».
     talkedAt: timestamp("talked_at", { withTimezone: true, mode: "date" }),
+    // Optional birthday; added by an additive migration.
+    birthday:   date("birthday",  { mode: "string" }),
     createdAt: timestamp("created_at", {
       withTimezone: true,
       mode: "date",
