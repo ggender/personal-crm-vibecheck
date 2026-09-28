@@ -16,3 +16,6 @@ data/
 
 # OpenSpec artifacts are written by the workflow, not formatted
 openspec/
+
+# Generated prod-check reports
+prod-check/
