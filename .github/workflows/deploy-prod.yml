@@ -1,0 +1,66 @@
+# Prod by hand: Actions → Deploy prod → Run workflow, the SHA of the image.
+# The same workflow rolls back: run it with the SHA of the previous version.
+name: Deploy prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "SHA коммита (можно короткий), который прошёл тест-стенд"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+  deployments: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  prod:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.PROD_URL }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Full SHA
+        id: sha
+        run: |
+          full=$(gh api "repos/${{ github.repository }}/commits/${{ inputs.sha }}" --jq .sha)
+          echo "Deploying $full"
+          echo "full=$full" >> "$GITHUB_OUTPUT"
+      - name: The SHA passed the test stand
+        run: |
+          sha=${{ steps.sha.outputs.full }}
+          for id in $(gh api "repos/${{ github.repository }}/deployments?environment=staging&sha=$sha" --jq '.[].id'); do
+            state=$(gh api "repos/${{ github.repository }}/deployments/$id/statuses" --jq '.[0].state')
+            if [ "$state" = success ]; then
+              echo "Staging deployment $id: success"
+              exit 0
+            fi
+          done
+          echo "::error::Коммит $sha не прошёл тест-стенд - на прод не катим"
+          exit 1
+      - name: SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          echo "${{ vars.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+      - name: Deploy
+        run: |
+          ssh -i ~/.ssh/deploy deploy@${{ vars.SERVER_HOST }} \
+            "echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin >/dev/null \
+             && /opt/crm/deploy.sh prod ${{ steps.sha.outputs.full }}; code=\$?; docker logout ghcr.io >/dev/null; exit \$code"
+      - name: Smoke test
+        run: curl -fsS --retry 10 --retry-all-errors --retry-delay 3 "${{ vars.PROD_URL }}/api/health"
+      # Keep the newest 3 images in GHCR.
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: personal-crm-vibecheck
+          package-type: container
+          min-versions-to-keep: 3
