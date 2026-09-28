@@ -29,6 +29,13 @@
       "when": 1790633339222,
       "tag": "0003_contact_birthday",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790634035759,
+      "tag": "0004_normalize_phones",
+      "breakpoints": true
     }
   ]
 }
