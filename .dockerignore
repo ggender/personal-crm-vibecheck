@@ -1,0 +1,15 @@
+.git
+.next
+node_modules
+data
+test-results
+playwright-report
+e2e/.auth
+coverage
+.env*
+.claude
+prod-check
+specs
+docs
+openspec
+*.tsbuildinfo
