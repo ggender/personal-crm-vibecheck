@@ -40,8 +40,7 @@ for _ in $(seq 1 30); do
   if curl -fsS "http://127.0.0.1:$APP_PORT/api/health" >/dev/null 2>&1; then
     echo "$SHA" >"$DIR/current"
     echo "$(date -Iseconds) $SHA" >>"$DIR/history"
-    # Unused images older than two weeks; a rollback pulls from GHCR anyway.
-    docker image prune -af --filter until=336h >/dev/null
+    "$CRM_ROOT/prune-images.sh"
     echo "== $ENV is on ${SHA:0:7}"
     exit 0
   fi
