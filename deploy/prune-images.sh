@@ -7,8 +7,10 @@ REPO=ghcr.io/ggender/personal-crm-vibecheck
 AGE_DAYS=${PRUNE_AGE_DAYS:-14}
 
 # Newest first, each SHA once: the current prod version and the two before it.
-protected=$(tac "$CRM_ROOT/prod/history" 2>/dev/null | awk '!seen[$2]++ {print $2}' | head -3)
+# One line, space separated: the match below looks for " <sha> ".
+protected=$(tac "$CRM_ROOT/prod/history" 2>/dev/null | awk '!seen[$2]++ {print $2}' | head -3 | tr '\n' ' ')
 protected="$protected $(cat "$CRM_ROOT/staging/current" 2>/dev/null || true)"
+echo "== keeping $(for s in $protected; do printf '%s ' "${s:0:7}"; done)"
 cutoff=$(date -d "-$AGE_DAYS days" +%s)
 
 for tag in $(docker images "$REPO" --format '{{.Tag}}'); do
